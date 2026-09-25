@@ -1,0 +1,188 @@
+<?php
+session_start();
+require_once __DIR__.'/../vendor/autoload.php';
+$ruta_raiz = dirname(__DIR__);       // /data/sites/devdocs.ucuenca.edu.ec/quipux
+require_once $ruta_raiz . '/config.php';
+require_once $ruta_raiz . '/include/db/ConnectionHandler.php';
+require_once $ruta_raiz . '/SessionManager.php';
+
+// Carga configuración
+$settings = require __DIR__.'/settings.php';
+$auth     = new OneLogin\Saml2\Auth($settings);
+
+
+// Procesa la respuesta (POST) del IdP
+$auth->processResponse();
+$errors = $auth->getErrors();
+#if (!empty($errors)) {
+#    echo 'SAML error: '.implode(', ', $errors);
+#    exit;
+#}
+
+
+if (!empty($errors)) {
+    // mostrar errores y el motivo exacto
+    error_log('SAML errors: '.implode(', ', $errors));
+    error_log('Last Reason: '.$auth->getLastErrorReason());
+    die('SAML error: '.$auth->getLastErrorReason());
+}
+
+// --- MODO DE PRUEBA ---
+if (!empty($_SESSION['saml_test'])) {
+    // Borra la bandera de prueba para no interferir en futuras sesiones
+    unset($_SESSION['saml_test']);
+
+    // Obtiene el NameID y los atributos
+    $nameId     = $auth->getNameId();
+    $attributes = $auth->getAttributes();
+
+    // Muestra la información
+    echo "<h2>Prueba de federación SAML completada</h2>";
+    echo "<p><strong>NameID:</strong> ".htmlspecialchars($nameId)."</p>";
+    if (!empty($attributes)) {
+        echo "<h3>Atributos recibidos:</h3><ul>";
+        foreach ($attributes as $key => $values) {
+            echo "<li><strong>".htmlspecialchars($key)."</strong>: ".htmlspecialchars(implode(', ', $values))."</li>";
+        }
+        echo "</ul>";
+    } else {
+        echo "<p>No se recibieron atributos adicionales.</p>";
+    }
+    exit;  // No continúa con el flujo normal de login
+}
+// --- FIN MODO DE PRUEBA ---
+
+// Verifica autenticación
+if (!$auth->isAuthenticated()) {
+    echo 'No autenticado por SAML';
+    exit;
+}
+
+// Obtiene el NameID (email en este caso) y atributos
+$nameId     = $auth->getNameId();
+$attributes = $auth->getAttributes();
+
+// Normaliza el email
+$loginEmail = strtolower(trim($nameId));
+$loginEmail = preg_replace('/[\x00-\x1F\x7F\xA0]/u', '', $loginEmail); // limpia caracteres invisibles
+
+// --- Búsqueda del usuario en Quipux ---
+require_once __DIR__.'/../config.php';
+require_once __DIR__.'/../include/db/ConnectionHandler.php';
+
+$db = new ConnectionHandler(__DIR__.'/..', '');
+$db->conn->SetFetchMode(ADODB_FETCH_ASSOC);
+
+// Buscar usuario por email
+$sql = "SELECT u.usua_codi, u.usua_login, u.depe_codi, u.depe_nomb,
+               u.usua_tipo, u.usua_esta, u.usua_nombre, u.usua_email,
+               u.usua_cedula, u.usua_nuevo, u.cargo_tipo
+        FROM usuarios u
+        WHERE TRIM(LOWER(u.usua_email)) = TRIM(LOWER(?))
+        LIMIT 1";
+
+$sql = "SELECT u.usua_login, u.depe_codi, u.usua_tipo, u.usua_esta,
+               u.usua_codi, d.depe_nomb, u.usua_nomb, u.usua_email,
+               u.usua_cedula, u.usua_nuevo, u.cargo_tipo, u.inst_codi	       
+	  FROM usuarios u
+    INNER JOIN dependencia d ON u.depe_codi = d.depe_codi 
+	 WHERE TRIM(LOWER(u.usua_email)) = TRIM(LOWER(?)) LIMIT 1";
+
+$rs = $db->conn->Execute($sql, [$loginEmail]);
+
+if (!$rs || $rs->EOF || intval($rs->fields['USUA_ESTA']) !== 1) {
+    echo 'No autorizado: usuario '.$loginEmail.' no existe o está inactivo';
+    exit;
+}
+
+// ===========================================================
+// === CONFIGURACIÓN COMPLETA DE SESIÓN, ESTILO ORFEO/QUIPUX ===
+// ===========================================================
+
+// Datos básicos
+$krd = strtoupper(trim($rs->fields["USUA_LOGIN"]));
+$remote_addr = SessionManager::getClientIP();
+$appID = "QUIPUX";
+
+// Generar session_id igual que en session_orfeo.php
+session_write_close(); // cierra cualquier sesión previa
+session_id(str_replace(".","o",$remote_addr)."o$krd"."o".date("His")."o$appID");
+session_start();
+
+// Variables de sesión obligatorias
+$_SESSION["krd"]          = $krd;
+$_SESSION["user"]         = $rs->fields["USUA_LOGIN"];
+$_SESSION["drd"]          = ''; // no se usa password en SAML
+$_SESSION["usua_codi"]    = $rs->fields["USUA_CODI"];
+$_SESSION["dependencia"]  = $rs->fields["DEPE_CODI"];
+$_SESSION["depe_codi"]    = $rs->fields["DEPE_CODI"];
+$_SESSION["depe_nomb"]    = $rs->fields["DEPE_NOMB"] ?? '';
+$_SESSION["cargo_tipo"]   = $rs->fields["CARGO_TIPO"] ?? '';
+$_SESSION["usua_doc"]     = $rs->fields["USUA_CEDULA"] ?? '';
+$_SESSION["usua_nomb"]    = $rs->fields["USUA_NOMB"] ?? '';
+$_SESSION["usua_nuevo"]   = $rs->fields["USUA_NUEVO"] ?? 0;
+$_SESSION["tipo_usuario"] = $rs->fields["USUA_TIPO"];
+$_SESSION["usua_email"]   = $rs->fields["USUA_EMAIL"];
+$_SESSION["inst_codi"]   = $rs->fields["INST_CODI"];
+$_SESSION["nivelus"]      = "1";
+$_SESSION["access"]       = 1;
+$_SESSION["initiated"]    = true;
+
+// Hora de inicio de sesión
+$_SESSION["hora_session"] = time();
+$_SESSION["session_dos_pagina"] = "";
+$_SESSION["session_dos_num_accesos"] = 0;
+$_SESSION["session_dos_hora"] = 0;
+$_SESSION["session_dos_bloquear_usuario"] = false;
+
+// Variables de sesion de adfs
+$_SESSION['samlNameId']       = $auth->getNameId();
+$_SESSION['samlSessionIndex'] = $auth->getSessionIndex();
+
+// [REQ-1] Marcar método de autenticación para que cerrar_session.php
+// pueda decidir si invoca SLO (Single Logout) contra el IdP.
+$_SESSION['auth_method'] = 'saml';
+
+// ===========================================
+// === REGISTRO DE SESIÓN EN usuarios_sesion ===
+// ===========================================
+$recordSet = [];
+$recordSet["usua_sesion"]     = $db->conn->qstr(session_id());
+$recordSet["usua_fech_sesion"]= $db->conn->sysTimeStamp;
+$recordSet["usua_codi"]       = $rs->fields["USUA_CODI"];
+$recordSet["usua_intentos"]   = "0";
+$recordSet["ip_cliente"]      = $db->conn->qstr($remote_addr);
+$db->conn->Replace("usuarios_sesion", $recordSet, "usua_codi", false, false, true, false);
+
+// ===========================
+// === PERMISOS DEL USUARIO ===
+// ===========================
+$sqlPerms = "SELECT p.nombre, count(pc.id_permiso) as permiso
+             FROM permiso p
+             LEFT JOIN permiso_usuario pc ON p.id_permiso=pc.id_permiso
+                  AND pc.usua_codi = ".$rs->fields["USUA_CODI"]."
+             GROUP BY p.nombre";
+$rsPerms = $db->conn->Execute($sqlPerms);
+while ($rsPerms && !$rsPerms->EOF) {
+    $_SESSION[$rsPerms->fields["NOMBRE"]] = $rsPerms->fields["PERMISO"];
+    $rsPerms->MoveNext();
+}
+
+// ========================================
+// === ABRIR SESIÓN SEGURA (SecureSession)
+// ========================================
+require_once __DIR__.'/../securesession.class.php';
+$ss = new SecureSession();
+$ss->check_browser    = true;
+$ss->check_ip_blocks  = 2;
+$ss->secure_word      = 'QUIPUX_COMUNIDAD_V4';
+$ss->regenerate_id    = false;
+$ss->Open();
+
+// ========================================
+// === REDIRECCIÓN FINAL AL SISTEMA ===
+// ========================================
+header("Location: /index_frames.php");
+exit;
+
+

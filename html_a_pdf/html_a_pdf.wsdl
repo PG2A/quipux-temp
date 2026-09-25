@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<definitions name="soapapihtml_a_pdf" targetNamespace="urn:soapapihtml_a_pdf"
+    xmlns:typens="urn:soapapihtml_a_pdf" xmlns:http="http://schemas.xmlsoap.org/wsdl/http/"
+    xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:s="http://www.w3.org/2001/XMLSchema"
+    xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/"
+    xmlns:mime="http://schemas.xmlsoap.org/wsdl/mime/" xmlns="http://schemas.xmlsoap.org/wsdl/">
+
+    <types>
+        <s:schema xmlns="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:soapapihtml_a_pdf" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">
+            <s:complexType name="ResultElementArray">
+                <s:complexContent>
+                    <s:restriction base="soapenc:Array">
+                    <s:attribute ref="soapenc:arrayType" wsdl:arrayType="s:string[]"/>
+                    </s:restriction>
+                </s:complexContent>
+            </s:complexType>
+            <s:complexType name="UserQuery">
+                <s:all>
+                    <s:element name="User" type="s:string"/>
+                    <s:element name="Password" type="s:string"/>
+                </s:all>
+            </s:complexType>
+        </s:schema>
+    </types>
+
+    <message name="html_a_pdfRequest">
+        <part name="set_html"	type="s:base64Binary"></part>
+        <part name="set_pdf" 	type="s:base64Binary"></part>
+        <part name="set_estado"	type="s:string"></part>
+        <part name="set_num_docu" type="s:string"></part>
+        <part name="set_fech_docu" type="s:string"></part>
+        <part name="set_num_pag"   type="s:string"></part>
+        <part name="set_orient_pag"   type="s:string"></part>
+    </message>
+    <message name="html_a_pdfResponse">
+        <part name="result" type="s:base64Binary"></part>
+    </message>
+
+    <message name="unir_archivos_pdfRequest">
+        <part name="set_archivos_pdf" type="s:ResultElementArray"></part>
+    </message>
+    <message name="unir_archivos_pdfResponse">
+        <part name="result" type="s:base64Binary"></part>
+    </message>
+
+    <portType name="soapapihtml_a_pdfPort">
+        <operation name="html_a_pdf">
+            <input  message="typens:html_a_pdfRequest"></input>
+            <output message="typens:html_a_pdfResponse"></output>
+        </operation>
+        <operation name="unir_archivos_pdf">
+            <input  message="typens:unir_archivos_pdfRequest"></input>
+            <output message="typens:unir_archivos_pdfResponse"></output>
+        </operation>
+    </portType>
+
+    <binding name="soapapihtml_a_pdfBinding" type="typens:soapapihtml_a_pdfPort">
+        <soap:binding style="rpc" transport="http://schemas.xmlsoap.org/soap/http" />
+        <operation name="html_a_pdf">
+            <soap:operation soapAction="urn:soapapihtml_a_pdf/html_a_pdf" />
+            <input>
+                <soap:body use="encoded" namespace="urn:soapapihtml_a_pdf" encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" />
+            </input>
+            <output>
+                <soap:body use="encoded" namespace="urn:soapapihtml_a_pdf" encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" />
+            </output>
+        </operation>
+        <operation name="unir_archivos_pdf">
+            <soap:operation soapAction="urn:soapapihtml_a_pdf/unir_archivos_pdf" />
+            <input>
+                <soap:body use="encoded" namespace="urn:soapapihtml_a_pdf" encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" />
+            </input>
+            <output>
+                <soap:body use="encoded" namespace="urn:soapapihtml_a_pdf" encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" />
+            </output>
+        </operation>
+    </binding>
+    
+    <service name="soapapihtml_a_pdfService">
+        <port name="soapapihtml_a_pdfPort" binding="typens:soapapihtml_a_pdfBinding">
+            <soap:address location="https://docs.ucuenca.edu.ec/html_a_pdf/html_a_pdf.php"/>
+        </port>
+    </service>
+</definitions>

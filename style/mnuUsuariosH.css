@@ -1,0 +1,138 @@
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background-color: #fff;
+}
+
+/* Contenedor del menú */
+.menu-container {
+    display: inline-flex;
+    align-items: center;
+    background: none;
+    border: none;
+    padding: 0;
+    gap: 8px;
+    box-shadow: none;
+}
+
+/* Grupo de botones */
+.menu-buttons {
+    display: flex;
+    gap: 16px;
+    padding: 0 8px;
+}
+
+/* Cada item del menú */
+.menu-item {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    background: #FCB75F;
+    border-radius: 6px;
+    padding: 4px 12px;
+    min-height: 24px;
+    text-decoration: none !important;
+    cursor: pointer;
+    transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.menu-item:hover {
+    background: #e6a23c;
+    box-shadow: 0 2px 6px rgba(230, 162, 60, 0.35);
+}
+
+/* Botón circular */
+.menu-btn {
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    background: none;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #3a2a10;
+    font-size: 12px;
+    box-shadow: none;
+}
+
+/* .menu-item:hover .menu-btn {
+    background: linear-gradient(to bottom, #5dade2 0%, #3498db 50%, #2874a6 100%);
+    border-color: #85c1e9;
+    box-shadow:
+        0 4px 8px rgba(0, 0, 0, 0.3),
+        inset 0 1px 2px rgba(255, 255, 255, 0.4);
+} */
+.menu-item:hover .menu-btn {
+    background: none;
+    color: #3a2a10;
+    box-shadow: none;
+}
+
+/* Etiqueta del botón */
+.menu-label {
+    margin-top: 0;
+    font-size: 11px;
+    color: #3a2a10;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* Iconos personalizados para el botón de buscar usuario */
+.icon-user-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-user-search .fa-user {
+    font-size: 16px;
+}
+
+.icon-user-search .fa-magnifying-glass {
+    position: absolute;
+    font-size: 10px;
+    bottom: -2px;
+    right: -4px;
+}
+
+/* Iconos personalizados para el botón de crear usuario */
+.icon-user-plus {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-user-plus .fa-user {
+    font-size: 16px;
+}
+
+.icon-user-plus .fa-plus {
+    position: absolute;
+    font-size: 10px;
+    bottom: -2px;
+    right: -4px;
+    background: #27ae60;
+    border-radius: 50%;
+    padding: 2px;
+}
+
+.tab-button, .tab-button-link, .tab-button-ext {
+    display: inline-block;
+    margin: 5px;
+    padding: 5px 10px;
+    color: white;
+    background: linear-gradient(to bottom, #4a9cd4 0%, #2874a6 50%, #1a5276 100%);
+    border: none;
+    font-size: small !important;
+    text-decoration: none !important;
+    height: 30px !important;
+}
+
+.tab-button:hover, .tab-button-link:hover, .tab-button-ext:hover {
+    background: linear-gradient(to bottom, #ffd28a 0%, #FCB75F 50%, #e6a23c 100%);
+    color: #2c3e50;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.4);
+}

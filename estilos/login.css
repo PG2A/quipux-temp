@@ -1,0 +1,25 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 24px 16px; }
+.login-container { background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); width: 100%; max-width: 420px; overflow: hidden; }
+.login-header { background: linear-gradient(135deg, #002B5C 0%, #001d3f 100%); color: white; padding: 30px; text-align: center; }
+.login-header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+.login-header p { margin: 5px 0 0; opacity: 0.9; }
+.login-body { padding: 30px; }
+.form-group { margin-bottom: 20px; }
+.form-group label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
+.form-group input { width: 100%; padding: 12px 15px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; transition: border-color 0.3s, box-shadow 0.3s; }
+.form-group input:focus { outline: none; border-color: #002B5C; box-shadow: 0 0 0 3px rgba(0, 43, 92, 0.15); }
+.error-message { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 12px 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+.submit-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #002B5C 0%, #001d3f 100%); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+.submit-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0, 43, 92, 0.3); }
+.back-link { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 14px; padding: 12px 14px; border: 1px solid #d5dce6; border-radius: 8px; background: #fff; color: #002B5C; font-size: 15px; font-weight: 600; text-decoration: none; transition: background-color 0.2s, border-color 0.2s; }
+.back-link:hover { background: #f1f5fa; border-color: #002B5C; }
+.login-registro{margin-top:18px;text-align:center;font-size:14px;line-height:21px;color:#555}
+.login-registro a{color:#002B5C;font-weight:600;text-decoration:none}
+.login-registro a:hover{text-decoration:underline}
+.back-link svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+@media (max-width: 480px) {
+    .login-header { padding: 24px 20px; }
+    .login-header h1 { font-size: 20px; }
+    .login-body { padding: 24px 20px; }
+}

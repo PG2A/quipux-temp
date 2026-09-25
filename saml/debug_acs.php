@@ -1,0 +1,413 @@
+<?php
+session_start();
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use OneLogin\Saml2\Auth;
+
+date_default_timezone_set('America/Guayaquil');
+
+$settings = require __DIR__ . '/settings.php';
+
+$settings['sp']['assertionConsumerService']['url'] = 'https://devdocs.ucuenca.edu.ec/saml/debug_acs.php';
+
+/*
+|--------------------------------------------------------------------------
+| Seguridad básica del debug
+|--------------------------------------------------------------------------
+*/
+$allowedIps = [
+    // 'TU.IP.PUBLICA.AQUI',
+];
+
+$clientIp = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+$clientIp = explode(',', $clientIp)[0];
+$clientIp = trim($clientIp);
+
+if (!empty($allowedIps) && !in_array($clientIp, $allowedIps, true)) {
+    http_response_code(403);
+    exit('Acceso no permitido para debug SAML.');
+}
+
+$debugDir = __DIR__ . '/debug_logs';
+if (!is_dir($debugDir)) {
+    mkdir($debugDir, 0700, true);
+}
+
+$runId = date('Ymd_His') . '_' . bin2hex(random_bytes(4));
+$logFile = $debugDir . "/saml_debug_$runId.log";
+$xmlFile = $debugDir . "/saml_response_$runId.xml";
+
+function h($value) {
+    return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+function log_debug($file, $label, $data = null) {
+    $line = '[' . date('Y-m-d H:i:s') . '] ' . $label;
+    if ($data !== null) {
+        if (is_array($data) || is_object($data)) {
+            $line .= ': ' . print_r($data, true);
+        } else {
+            $line .= ': ' . $data;
+        }
+    }
+    file_put_contents($file, $line . PHP_EOL, FILE_APPEND);
+}
+
+function normalize_cert_to_pem($cert) {
+    $cert = trim((string)$cert);
+    $cert = str_replace(["-----BEGIN CERTIFICATE-----", "-----END CERTIFICATE-----", "\r", "\n", " "], '', $cert);
+
+    if ($cert === '') {
+        return null;
+    }
+
+    return "-----BEGIN CERTIFICATE-----\n" .
+        chunk_split($cert, 64, "\n") .
+        "-----END CERTIFICATE-----\n";
+}
+
+function cert_info_from_base64($certBase64) {
+    $pem = normalize_cert_to_pem($certBase64);
+    if (!$pem) {
+        return null;
+    }
+
+    $tmp = tempnam(sys_get_temp_dir(), 'saml_cert_');
+    file_put_contents($tmp, $pem);
+
+    $fingerprint = trim(shell_exec('openssl x509 -in ' . escapeshellarg($tmp) . ' -noout -fingerprint -sha256 2>&1'));
+    $subject     = trim(shell_exec('openssl x509 -in ' . escapeshellarg($tmp) . ' -noout -subject 2>&1'));
+    $issuer      = trim(shell_exec('openssl x509 -in ' . escapeshellarg($tmp) . ' -noout -issuer 2>&1'));
+    $dates       = trim(shell_exec('openssl x509 -in ' . escapeshellarg($tmp) . ' -noout -dates 2>&1'));
+
+    @unlink($tmp);
+
+    return [
+        'fingerprint_sha256' => $fingerprint,
+        'subject' => $subject,
+        'issuer' => $issuer,
+        'dates' => $dates,
+    ];
+}
+
+function xpath_first($xpath, $query) {
+    $nodes = $xpath->query($query);
+    if ($nodes && $nodes->length > 0) {
+        return trim($nodes->item(0)->textContent);
+    }
+    return null;
+}
+
+function xpath_attr_first($xpath, $query, $attr) {
+    $nodes = $xpath->query($query);
+    if ($nodes && $nodes->length > 0 && $nodes->item(0)->attributes && $nodes->item(0)->attributes->getNamedItem($attr)) {
+        return $nodes->item(0)->attributes->getNamedItem($attr)->nodeValue;
+    }
+    return null;
+}
+
+log_debug($logFile, '==== INICIO DEBUG SAML ====');
+log_debug($logFile, 'Client IP', $clientIp);
+log_debug($logFile, 'Method', $_SERVER['REQUEST_METHOD'] ?? '');
+log_debug($logFile, 'Request URI', $_SERVER['REQUEST_URI'] ?? '');
+log_debug($logFile, 'Expected user', $_SESSION['saml_debug_expected_user'] ?? '(no definido)');
+
+$rawPostKeys = array_keys($_POST);
+log_debug($logFile, 'POST keys', $rawPostKeys);
+
+$samlResponseB64 = $_POST['SAMLResponse'] ?? null;
+$relayState = $_POST['RelayState'] ?? ($_GET['RelayState'] ?? null);
+
+$decodedXml = null;
+$xmlLoaded = false;
+$analysis = [];
+$validation = [];
+
+$analysis['relay_state'] = $relayState;
+$analysis['has_saml_response'] = !empty($samlResponseB64);
+$analysis['saml_response_base64_length'] = $samlResponseB64 ? strlen($samlResponseB64) : 0;
+
+if (empty($samlResponseB64)) {
+    log_debug($logFile, 'ERROR', 'No llegó SAMLResponse por POST');
+} else {
+    $decodedXml = base64_decode($samlResponseB64, true);
+
+    if ($decodedXml === false) {
+        log_debug($logFile, 'ERROR', 'No se pudo decodificar SAMLResponse base64');
+    } else {
+        file_put_contents($xmlFile, $decodedXml);
+        chmod($xmlFile, 0600);
+
+        $analysis['xml_file'] = $xmlFile;
+        $analysis['xml_length'] = strlen($decodedXml);
+        log_debug($logFile, 'XML guardado', $xmlFile);
+
+        libxml_use_internal_errors(true);
+
+        $dom = new DOMDocument();
+        $dom->preserveWhiteSpace = true;
+        $dom->formatOutput = true;
+
+        if ($dom->loadXML($decodedXml)) {
+            $xmlLoaded = true;
+
+            $prettyXml = $dom->saveXML();
+            file_put_contents($xmlFile, $prettyXml);
+
+            $xpath = new DOMXPath($dom);
+            $xpath->registerNamespace('samlp', 'urn:oasis:names:tc:SAML:2.0:protocol');
+            $xpath->registerNamespace('saml', 'urn:oasis:names:tc:SAML:2.0:assertion');
+            $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
+
+            $analysis['response_id'] = xpath_attr_first($xpath, '/*[local-name()="Response"]', 'ID');
+            $analysis['response_issuer'] = xpath_first($xpath, '/*[local-name()="Response"]/*[local-name()="Issuer"]');
+            $analysis['response_destination'] = xpath_attr_first($xpath, '/*[local-name()="Response"]', 'Destination');
+            $analysis['response_issue_instant'] = xpath_attr_first($xpath, '/*[local-name()="Response"]', 'IssueInstant');
+            $analysis['response_in_response_to'] = xpath_attr_first($xpath, '/*[local-name()="Response"]', 'InResponseTo');
+
+            $analysis['assertion_id'] = xpath_attr_first($xpath, '//*[local-name()="Assertion"]', 'ID');
+            $analysis['assertion_issuer'] = xpath_first($xpath, '//*[local-name()="Assertion"]/*[local-name()="Issuer"]');
+            $analysis['name_id'] = xpath_first($xpath, '//*[local-name()="Subject"]/*[local-name()="NameID"]');
+
+            $analysis['audience'] = xpath_first($xpath, '//*[local-name()="AudienceRestriction"]/*[local-name()="Audience"]');
+            $analysis['subject_confirmation_recipient'] = xpath_attr_first($xpath, '//*[local-name()="SubjectConfirmationData"]', 'Recipient');
+            $analysis['subject_confirmation_not_on_or_after'] = xpath_attr_first($xpath, '//*[local-name()="SubjectConfirmationData"]', 'NotOnOrAfter');
+            $analysis['conditions_not_before'] = xpath_attr_first($xpath, '//*[local-name()="Conditions"]', 'NotBefore');
+            $analysis['conditions_not_on_or_after'] = xpath_attr_first($xpath, '//*[local-name()="Conditions"]', 'NotOnOrAfter');
+
+            $responseSignature = $xpath->query('/*[local-name()="Response"]/*[local-name()="Signature"]');
+            $assertionSignature = $xpath->query('//*[local-name()="Assertion"]/*[local-name()="Signature"]');
+
+            $analysis['response_signed'] = ($responseSignature && $responseSignature->length > 0) ? 'SI' : 'NO';
+            $analysis['assertion_signed'] = ($assertionSignature && $assertionSignature->length > 0) ? 'SI' : 'NO';
+
+            $signatureMethods = [];
+            foreach ($xpath->query('//*[local-name()="SignatureMethod"]') as $node) {
+                $signatureMethods[] = $node->attributes->getNamedItem('Algorithm')?->nodeValue;
+            }
+            $digestMethods = [];
+            foreach ($xpath->query('//*[local-name()="DigestMethod"]') as $node) {
+                $digestMethods[] = $node->attributes->getNamedItem('Algorithm')?->nodeValue;
+            }
+
+            $analysis['signature_methods'] = $signatureMethods;
+            $analysis['digest_methods'] = $digestMethods;
+
+            $certs = [];
+            foreach ($xpath->query('//*[local-name()="X509Certificate"]') as $idx => $node) {
+                $certBase64 = trim($node->textContent);
+                $certs[] = [
+                    'index' => $idx,
+                    'length' => strlen($certBase64),
+                    'info' => cert_info_from_base64($certBase64),
+                ];
+            }
+            $analysis['certificates_in_response'] = $certs;
+
+            $attributes = [];
+            foreach ($xpath->query('//*[local-name()="Attribute"]') as $attrNode) {
+                $attrName = $attrNode->attributes->getNamedItem('Name')?->nodeValue ?? '(sin nombre)';
+                $values = [];
+                foreach ($xpath->query('./*[local-name()="AttributeValue"]', $attrNode) as $valueNode) {
+                    $values[] = trim($valueNode->textContent);
+                }
+                $attributes[$attrName] = $values;
+            }
+            $analysis['attributes'] = $attributes;
+
+            $expectedUser = strtolower(trim($_SESSION['saml_debug_expected_user'] ?? ''));
+            $nameIdLower = strtolower(trim($analysis['name_id'] ?? ''));
+
+            if ($expectedUser !== '') {
+                $analysis['expected_user'] = $expectedUser;
+                $analysis['nameid_matches_expected_user'] = ($nameIdLower === $expectedUser) ? 'SI' : 'NO';
+            }
+
+            $analysis['settings_sp_entity_id'] = $settings['sp']['entityId'] ?? null;
+            $analysis['settings_acs_url'] = $settings['sp']['assertionConsumerService']['url'] ?? null;
+            $analysis['settings_idp_entity_id'] = $settings['idp']['entityId'] ?? null;
+            $analysis['settings_idp_sso_url'] = $settings['idp']['singleSignOnService']['url'] ?? null;
+            $analysis['settings_security'] = $settings['security'] ?? [];
+
+            $idpCert = $settings['idp']['x509cert'] ?? '';
+            $analysis['settings_idp_cert_length'] = strlen($idpCert);
+            $analysis['settings_idp_cert_info'] = cert_info_from_base64($idpCert);
+
+            log_debug($logFile, 'ANALISIS XML', $analysis);
+        } else {
+            $errors = libxml_get_errors();
+            $analysis['xml_parse_errors'] = array_map(function ($e) {
+                return trim($e->message) . ' line ' . $e->line;
+            }, $errors);
+            log_debug($logFile, 'ERROR XML', $analysis['xml_parse_errors']);
+        }
+
+        libxml_clear_errors();
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Validación real con OneLogin
+|--------------------------------------------------------------------------
+*/
+try {
+    $auth = new Auth($settings);
+    $auth->processResponse();
+
+    $errors = $auth->getErrors();
+
+    $validation['onelogin_errors'] = $errors;
+    $validation['last_error_reason'] = $auth->getLastErrorReason();
+    $validation['is_authenticated'] = $auth->isAuthenticated() ? 'SI' : 'NO';
+
+    if (empty($errors) && $auth->isAuthenticated()) {
+        $validation['name_id_from_onelogin'] = $auth->getNameId();
+        $validation['session_index'] = $auth->getSessionIndex();
+        $validation['attributes_from_onelogin'] = $auth->getAttributes();
+    }
+
+    log_debug($logFile, 'ONELOGIN VALIDATION', $validation);
+} catch (Throwable $e) {
+    $validation['exception_class'] = get_class($e);
+    $validation['exception_message'] = $e->getMessage();
+    $validation['exception_file'] = $e->getFile();
+    $validation['exception_line'] = $e->getLine();
+
+    log_debug($logFile, 'ONELOGIN EXCEPTION', $validation);
+}
+
+log_debug($logFile, '==== FIN DEBUG SAML ====');
+
+header('Content-Type: text/html; charset=UTF-8');
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug SAML Quipux</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 24px; background: #f6f7fb; color: #222; }
+        .box { background: #fff; padding: 18px; border-radius: 8px; margin-bottom: 18px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+        h1 { margin-top: 0; }
+        h2 { margin-bottom: 8px; }
+        pre { background: #111827; color: #e5e7eb; padding: 14px; overflow: auto; border-radius: 6px; max-height: 480px; }
+        .ok { color: #047857; font-weight: bold; }
+        .bad { color: #b91c1c; font-weight: bold; }
+        .warn { color: #b45309; font-weight: bold; }
+        table { border-collapse: collapse; width: 100%; background: white; }
+        td, th { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
+        th { background: #f3f4f6; text-align: left; }
+    </style>
+</head>
+<body>
+
+<h1>Debug SAML Quipux</h1>
+
+<div class="box">
+    <h2>Resultado rápido</h2>
+    <?php if (!empty($validation['onelogin_errors'])): ?>
+        <p class="bad">OneLogin rechazó la respuesta SAML.</p>
+        <p><strong>Motivo:</strong> <?= h($validation['last_error_reason'] ?? '') ?></p>
+    <?php elseif (($validation['is_authenticated'] ?? '') === 'SI'): ?>
+        <p class="ok">Respuesta SAML válida. Usuario autenticado.</p>
+    <?php else: ?>
+        <p class="warn">No se pudo confirmar autenticación. Revisa el detalle.</p>
+    <?php endif; ?>
+
+    <p><strong>Log:</strong> <?= h($logFile) ?></p>
+    <p><strong>XML:</strong> <?= h($xmlFile ?? '') ?></p>
+</div>
+
+<div class="box">
+    <h2>Firmas detectadas</h2>
+    <table>
+        <tr><th>Response firmada</th><td><?= h($analysis['response_signed'] ?? 'N/D') ?></td></tr>
+        <tr><th>Assertion firmada</th><td><?= h($analysis['assertion_signed'] ?? 'N/D') ?></td></tr>
+        <tr><th>SignatureMethod</th><td><pre><?= h(print_r($analysis['signature_methods'] ?? [], true)) ?></pre></td></tr>
+        <tr><th>DigestMethod</th><td><pre><?= h(print_r($analysis['digest_methods'] ?? [], true)) ?></pre></td></tr>
+    </table>
+</div>
+
+<div class="box">
+    <h2>Identidad recibida</h2>
+    <table>
+        <tr><th>NameID</th><td><?= h($analysis['name_id'] ?? '') ?></td></tr>
+        <tr><th>Usuario esperado</th><td><?= h($analysis['expected_user'] ?? '') ?></td></tr>
+        <tr><th>NameID coincide</th><td><?= h($analysis['nameid_matches_expected_user'] ?? 'N/D') ?></td></tr>
+        <tr><th>Atributos</th><td><pre><?= h(print_r($analysis['attributes'] ?? [], true)) ?></pre></td></tr>
+    </table>
+</div>
+
+<div class="box">
+    <h2>Validaciones críticas SAML</h2>
+    <table>
+        <tr><th>Response Issuer</th><td><?= h($analysis['response_issuer'] ?? '') ?></td></tr>
+        <tr><th>Assertion Issuer</th><td><?= h($analysis['assertion_issuer'] ?? '') ?></td></tr>
+        <tr><th>Destination</th><td><?= h($analysis['response_destination'] ?? '') ?></td></tr>
+        <tr><th>Recipient</th><td><?= h($analysis['subject_confirmation_recipient'] ?? '') ?></td></tr>
+        <tr><th>Audience</th><td><?= h($analysis['audience'] ?? '') ?></td></tr>
+        <tr><th>IssueInstant</th><td><?= h($analysis['response_issue_instant'] ?? '') ?></td></tr>
+        <tr><th>Conditions NotBefore</th><td><?= h($analysis['conditions_not_before'] ?? '') ?></td></tr>
+        <tr><th>Conditions NotOnOrAfter</th><td><?= h($analysis['conditions_not_on_or_after'] ?? '') ?></td></tr>
+        <tr><th>Subject NotOnOrAfter</th><td><?= h($analysis['subject_confirmation_not_on_or_after'] ?? '') ?></td></tr>
+    </table>
+</div>
+
+<div class="box">
+    <h2>Configuración local del SP</h2>
+    <table>
+        <tr><th>SP entityId</th><td><?= h($analysis['settings_sp_entity_id'] ?? '') ?></td></tr>
+        <tr><th>ACS URL</th><td><?= h($analysis['settings_acs_url'] ?? '') ?></td></tr>
+        <tr><th>IdP entityId</th><td><?= h($analysis['settings_idp_entity_id'] ?? '') ?></td></tr>
+        <tr><th>IdP SSO URL</th><td><?= h($analysis['settings_idp_sso_url'] ?? '') ?></td></tr>
+        <tr><th>Security</th><td><pre><?= h(print_r($analysis['settings_security'] ?? [], true)) ?></pre></td></tr>
+    </table>
+</div>
+
+<div class="box">
+    <h2>Certificados</h2>
+
+    <h3>Certificado configurado en settings.php / idp.x509cert</h3>
+    <pre><?= h(print_r($analysis['settings_idp_cert_info'] ?? [], true)) ?></pre>
+
+    <h3>Certificados incluidos en la respuesta SAML</h3>
+    <pre><?= h(print_r($analysis['certificates_in_response'] ?? [], true)) ?></pre>
+</div>
+
+<div class="box">
+    <h2>Resultado OneLogin</h2>
+    <pre><?= h(print_r($validation, true)) ?></pre>
+</div>
+
+<div class="box">
+    <h2>Diagnóstico orientativo</h2>
+    <ul>
+        <?php if (($analysis['response_signed'] ?? '') === 'NO' && (($analysis['settings_security']['wantMessagesSigned'] ?? false) === true)): ?>
+            <li class="bad">Tu SP exige Response firmada, pero la Response no viene firmada. Ajustar wantMessagesSigned=false o configurar ADFS para firmar Response.</li>
+        <?php endif; ?>
+
+        <?php if (($analysis['assertion_signed'] ?? '') === 'NO' && (($analysis['settings_security']['wantAssertionsSigned'] ?? false) === true)): ?>
+            <li class="bad">Tu SP exige Assertion firmada, pero la Assertion no viene firmada. Configurar ADFS para firmar Assertion.</li>
+        <?php endif; ?>
+
+        <?php if (!empty($analysis['audience']) && !empty($analysis['settings_sp_entity_id']) && $analysis['audience'] !== $analysis['settings_sp_entity_id']): ?>
+            <li class="bad">Audience no coincide con el entityId del SP. Revisar Relying Party Identifier en ADFS.</li>
+        <?php endif; ?>
+
+        <?php if (!empty($analysis['response_destination']) && !empty($analysis['settings_acs_url']) && $analysis['response_destination'] !== $analysis['settings_acs_url']): ?>
+            <li class="bad">Destination no coincide con ACS URL. Revisar endpoint ACS en ADFS y settings.php.</li>
+        <?php endif; ?>
+
+        <?php if (!empty($analysis['subject_confirmation_recipient']) && !empty($analysis['settings_acs_url']) && $analysis['subject_confirmation_recipient'] !== $analysis['settings_acs_url']): ?>
+            <li class="bad">Recipient no coincide con ACS URL. Revisar endpoint ACS en ADFS y settings.php.</li>
+        <?php endif; ?>
+
+        <?php if (($analysis['nameid_matches_expected_user'] ?? '') === 'NO'): ?>
+            <li class="warn">El NameID no coincide con el usuario esperado. Puede venir otro identificador: cédula, UPN, sAMAccountName o correo alternativo.</li>
+        <?php endif; ?>
+    </ul>
+</div>
+
+</body>
+</html>

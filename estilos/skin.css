@@ -1,0 +1,98 @@
+.borde_tab{border:1px solid #b9c2d6;border-radius:8px;background:#fff;box-shadow:0 1px 6px rgba(11,28,48,.06)}
+
+.borde_tab_tomate{border:1px solid #0b5fa5;border-radius:8px;background:#fff}
+.borde_tab_tomate td{padding-top:7px;padding-bottom:7px}
+
+.titulos4{background:#0b5fa5;color:#fff;font-weight:600;letter-spacing:.3px;padding:8px 10px;line-height:normal}
+
+.titulos2{background-color:#e3ecff;color:#0b1c30;font-weight:600}
+
+.listado2{background-color:#f7f9fc;color:#0b1c30}
+
+.botones,.botones_2,.botones_3,.botones_largo,.botones_largo1,.botones_mediano,.botones_mediano2{background:#FCB75F;color:#3a2a10;border:none;border-radius:6px;height:auto;min-height:24px;width:auto;min-width:70px;padding:4px 12px;margin:2px;font-weight:600;white-space:nowrap;cursor:pointer;transition:background .12s ease,box-shadow .12s ease}
+
+.botones:hover,.botones_2:hover,.botones_3:hover,.botones_largo:hover,.botones_largo1:hover,.botones_mediano:hover,.botones_mediano2:hover{background:#e6a23c;box-shadow:0 2px 6px rgba(230,162,60,.35)}
+
+.listado5{font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:600;color:#0b1c30;background-color:#f7f9fc}
+.titulos5{background:#0b5fa5;color:#fff;font-weight:600;font-size:11px;letter-spacing:.2px;padding:6px 6px;border:none}
+.titulos3{background:#e3ecff;color:#0b1c30;font-weight:600;font-size:11px;padding:6px 8px}
+.botones_azul{background:#0b5fa5;color:#fff;border:none;border-radius:5px;padding:3px 12px;font-size:11px;font-weight:600;cursor:pointer;transition:background .12s ease}
+.botones_azul:hover{background:#0a4f8a}
+
+table.popup-buscar{padding:6px}
+table.popup-buscar td.listado5{background:transparent}
+table.popup-buscar>tbody>tr>td:first-child{width:150px;white-space:nowrap;vertical-align:top;padding-top:10px}
+table.popup-buscar .tituloListado{font-size:11px;font-weight:700;letter-spacing:.4px;color:#0b5fa5}
+table.popup-buscar table{width:100%}
+table.popup-buscar table td{padding:2px 4px;vertical-align:middle}
+table.popup-buscar table td[align=right]{width:130px;white-space:nowrap}
+table.popup-buscar input[type=text]{min-width:240px}
+table.popup-buscar select{max-width:100%}
+table.popup-buscar .botones{margin-top:8px}
+
+.botones:active,.botones_largo1:active,.botones_mediano:active{filter:brightness(.95);box-shadow:none}
+
+.botones:focus-visible,.botones_largo1:focus-visible{outline:2px solid #0b5fa5;outline-offset:1px}
+
+.botones_funcion{background:#0b5fa5;color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer}
+.botones_funcion:hover{background:#0a4f8a}
+
+select.select{background:#fff;color:#0b1c30;border:1px solid #b9c2d6;border-radius:6px;padding:4px 8px;height:auto}
+
+table[cols][border]{border-collapse:collapse;border:1px solid #b9c2d6;background:#fff}
+table[cols][border] th{background:#0b5fa5;color:#fff;font-weight:600;font-size:11px;letter-spacing:.2px;padding:7px 6px;border:none;border-right:1px solid rgba(255,255,255,.14);white-space:nowrap}
+table[cols][border] th:last-child{border-right:none}
+table[cols][border] td{border:1px solid #e6ebf4;padding:4px 6px}
+table[cols][border] th input[type=checkbox],table[cols][border] td input[type=checkbox]{accent-color:#0b5fa5}
+
+table.pager-wrap{border:none;background:transparent;width:100%;border-collapse:collapse}
+table.pager-wrap>tbody>tr>td{border:none;background:transparent}
+.pager-nav{padding:6px 2px}
+.pager-nav code{display:inline-block;background:#f3f6fc;color:#8a94a8;border:1px solid #d5deee;border-radius:5px;padding:2px 8px;font-family:inherit;font-size:11px;font-weight:600;line-height:1.4}
+.pager-nav a{color:#0b5fa5;font-weight:600;text-decoration:none;display:inline-block;min-width:16px;text-align:center;padding:2px 7px;border-radius:5px;font-size:11px}
+.pager-nav a:hover{background:#e3ecff}
+.pager-nav a code{color:#0b5fa5;background:#fff;border-color:#b9c2d6}
+.pager-nav a:hover code{background:#e3ecff}
+.pager-nav font[color=red] b{display:inline-block;background:#0b5fa5;color:#fff;border-radius:5px;padding:2px 9px;font-size:11px;line-height:1.4}
+.pager-foot{padding:4px 2px}
+.pager-foot font{color:#41485a}
+
+input[type=text],input[type=password],input[type=email],input[type=number],input[type=date],input[type=search],textarea{background:#fff;color:#0b1c30;border:1px solid #b9c2d6;border-radius:6px;padding:4px 8px;margin:3px 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;transition:border-color .12s ease,box-shadow .12s ease}
+input[type=text]:focus,input[type=password]:focus,input[type=email]:focus,input[type=number]:focus,input[type=date]:focus,input[type=search]:focus,textarea:focus{outline:none;border-color:#0b5fa5;box-shadow:0 0 0 2px rgba(11,95,165,.15)}
+input[type=text]:disabled,input[type=password]:disabled,textarea:disabled,input[readonly]{background:#f3f6fc;color:#8a94a8}
+select{background:#fff;color:#0b1c30;border:1px solid #b9c2d6;border-radius:6px;padding:3px 6px;margin:3px 0;font-size:11px}
+select:focus{outline:none;border-color:#0b5fa5;box-shadow:0 0 0 2px rgba(11,95,165,.15)}
+input[type=checkbox],input[type=radio]{accent-color:#0b5fa5}
+input[type=file]{font-size:11px;color:#41485a}
+input[type=file]::file-selector-button{background:#FCB75F;color:#3a2a10;border:none;border-radius:6px;padding:4px 10px;font-weight:600;cursor:pointer;margin-right:8px}
+input[type=file]::file-selector-button:hover{background:#e6a23c}
+
+#sin_botones{margin-bottom:16px}
+
+table:has(> tbody > tr > td > #div_criterios){table-layout:fixed;width:100%}
+#div_criterios,#div_estructura{width:100%;overflow-x:auto}
+#div_criterios select,#div_estructura select{max-width:98%}
+#div_criterios table,#div_estructura table{max-width:100%}
+
+a.etextomenu{display:inline-block;padding:7px 16px;margin:0 2px 0 0;background:#f3f6fc;color:#41485a;border:1px solid #b9c2d6;border-bottom:none;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;font-family:Arial,Helvetica,sans-serif;text-decoration:none;vertical-align:bottom}
+a.etextomenu img{display:none !important}
+a.etextomenu:has(img[id$="_R"]:not([style*="none"])){background:#0b5fa5;color:#fff;border-color:#0b5fa5}
+a.etextomenu:has(#etiqueta1)::after{content:'Información del Documento'}
+a.etextomenu:has(#etiqueta2)::after{content:'Anexos'}
+a.etextomenu:has(#etiqueta3)::after{content:'Opciones de Impresión'}
+a.etextomenu:hover{background:#e3ecff;color:#0b5fa5}
+a.etextomenu:has(img[id$="_R"]:not([style*="none"])):hover{background:#0b5fa5;color:#fff}
+
+a:has(>img[src^="imagenes/infoGeneral"]),a:has(>img[src^="imagenes/documentos"]),a:has(>img[src^="imagenes/historico"]),a:has(>img[src^="imagenes/expediente"]),a:has(>img[src^="imagenes/asociados"]),a:has(>img[src^="imagenes/tareas"]),a:has(>img[src^="imagenes/metadato"]){display:inline-block;padding:7px 14px;margin:0 2px 0 0;background:#f3f6fc;color:#41485a;border:1px solid #b9c2d6;border-bottom:none;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;font-family:Arial,Helvetica,sans-serif;text-decoration:none;white-space:nowrap;vertical-align:bottom}
+td:has(>a>img[src^="imagenes/infoGeneral"]),td:has(>a>img[src^="imagenes/documentos"]),td:has(>a>img[src^="imagenes/historico"]),td:has(>a>img[src^="imagenes/expediente"]),td:has(>a>img[src^="imagenes/asociados"]),td:has(>a>img[src^="imagenes/tareas"]),td:has(>a>img[src^="imagenes/metadato"]){width:1% !important;white-space:nowrap;padding:0 !important}
+a>img[src^="imagenes/infoGeneral"],a>img[src^="imagenes/documentos"],a>img[src^="imagenes/historico"],a>img[src^="imagenes/expediente"],a>img[src^="imagenes/asociados"],a>img[src^="imagenes/tareas"],a>img[src^="imagenes/metadato"]{display:none !important}
+a:has(>img[src^="imagenes/infoGeneral"])::after{content:'Información del Documento'}
+a:has(>img[src^="imagenes/documentos"])::after{content:'Anexos'}
+a:has(>img[src^="imagenes/historico"])::after{content:'Recorrido'}
+a:has(>img[src^="imagenes/expediente"])::after{content:'Carpetas'}
+a:has(>img[src^="imagenes/asociados"])::after{content:'Doc. Asociados'}
+a:has(>img[src^="imagenes/tareas"])::after{content:'Tareas'}
+a:has(>img[src^="imagenes/metadato"])::after{content:'Metadatos'}
+a:has(>img[src^="imagenes/infoGeneral"]):hover,a:has(>img[src^="imagenes/documentos"]):hover,a:has(>img[src^="imagenes/historico"]):hover,a:has(>img[src^="imagenes/expediente"]):hover,a:has(>img[src^="imagenes/asociados"]):hover,a:has(>img[src^="imagenes/tareas"]):hover,a:has(>img[src^="imagenes/metadato"]):hover{background:#e3ecff;color:#0b5fa5}
+a:has(>img[src^="imagenes/infoGeneral_R"]),a:has(>img[src^="imagenes/documentos_R"]),a:has(>img[src^="imagenes/historico_R"]),a:has(>img[src^="imagenes/expediente_R"]),a:has(>img[src^="imagenes/asociados_R"]),a:has(>img[src^="imagenes/tareas_R"]),a:has(>img[src^="imagenes/metadato_R"]){background:#0b5fa5;color:#fff;border-color:#0b5fa5}
+a:has(>img[src^="imagenes/infoGeneral_R"]):hover,a:has(>img[src^="imagenes/documentos_R"]):hover,a:has(>img[src^="imagenes/historico_R"]):hover,a:has(>img[src^="imagenes/expediente_R"]):hover,a:has(>img[src^="imagenes/asociados_R"]):hover,a:has(>img[src^="imagenes/tareas_R"]):hover,a:has(>img[src^="imagenes/metadato_R"]):hover{background:#0b5fa5;color:#fff}

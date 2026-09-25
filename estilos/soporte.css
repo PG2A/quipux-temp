@@ -1,0 +1,51 @@
+:root{
+    --primary:#002B5C; --primary-container:#0a4f8a; --on-surface:#0b1c30;
+    --on-surface-variant:#464650; --outline:#b9c2d6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+img{max-width:100%;height:auto}
+body{
+    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--on-surface); min-height:100vh; display:flex; flex-direction:column;
+    background:linear-gradient(135deg,#f7fafd 0%,#eef4fb 50%,#e3ecff 100%);
+}
+.glass{
+    background:rgba(255,255,255,.78); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,.5); box-shadow:0 8px 32px 0 rgba(31,38,135,.07);
+}
+.topbar{position:sticky;top:0;z-index:50;background:rgba(0,43,92,.96);backdrop-filter:blur(8px);color:#fff;border-bottom:1px solid rgba(255,255,255,.1)}
+.topbar-in{max-width:1000px;margin:0 auto;display:flex;align-items:baseline;gap:12px;padding:14px 20px}
+.brand{font-family:"Hanken Grotesk",Inter,sans-serif;font-size:22px;font-weight:700}
+.topbar-sub{font-size:14px;opacity:.85}
+a.brand{color:#fff;text-decoration:none}
+.topbar-home{margin-left:auto;align-self:center;display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.1);color:#fff;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;transition:background .2s,border-color .2s}
+.topbar-home:hover{background:rgba(255,255,255,.22);border-color:#fff}
+.topbar-home svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media(max-width:480px){.topbar-in{flex-wrap:wrap}.topbar-home span{display:none}.topbar-home{padding:8px 10px}}
+.soporte-main{flex:1;width:100%;max-width:1000px;margin:0 auto;padding:28px 16px}
+.soporte-card{border-radius:20px;padding:28px}
+.soporte-card h1,.soporte-card h2,.soporte-card h3{color:var(--primary);margin-bottom:12px}
+.soporte-card p{margin-bottom:12px;line-height:1.6;color:var(--on-surface-variant)}
+.soporte-card a{color:var(--primary)}
+.soporte-card ul{padding-left:20px;margin-bottom:12px}
+.soporte-card table{width:100%!important;border-collapse:collapse;background:transparent!important}
+.soporte-card table td{padding:8px 6px;vertical-align:top}
+.soporte-card font{font-family:inherit!important}
+.soporte-foot{background:rgba(255,255,255,.55);border-top:1px solid var(--outline);text-align:center;padding:18px;color:var(--on-surface-variant);font-size:13px}
+@media(min-width:768px){
+    .soporte-card{padding:40px}
+    .soporte-main{padding:40px 24px}
+}
+.soporte-main--center{display:flex;align-items:center;justify-content:center}
+.soporte-card--auth{max-width:460px;width:100%;text-align:center}
+.auth-badge{width:64px;height:64px;margin:0 auto 18px;display:flex;align-items:center;justify-content:center;background:rgba(0,43,92,.08);border:1px solid rgba(0,43,92,.12);border-radius:50%;color:var(--primary)}
+.auth-badge svg{width:30px;height:30px}
+.soporte-card--auth h1{font-size:19px;margin-bottom:14px}
+.auth-msg{color:var(--on-surface-variant);line-height:1.65;font-size:15px}
+.auth-msg a.aqui{display:inline-block;margin-top:16px;background:var(--primary);color:#fff;text-decoration:none;font-weight:600;font-size:14px;padding:11px 28px;border-radius:12px;box-shadow:0 6px 18px rgba(0,43,92,.22);transition:transform .15s ease,box-shadow .15s ease}
+.auth-msg a.aqui:hover{transform:translateY(-1px);box-shadow:0 9px 24px rgba(0,43,92,.3)}
+.auth-actions{margin-top:22px;display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+.btn-regresar{display:inline-flex;align-items:center;justify-content:center;min-width:140px;background:var(--primary);color:#fff;border:0;cursor:pointer;font:600 14px/1 inherit;font-family:inherit;padding:12px 28px;border-radius:12px;box-shadow:0 6px 18px rgba(0,43,92,.22);transition:transform .15s ease,box-shadow .15s ease}
+.btn-regresar:hover{transform:translateY(-1px);box-shadow:0 9px 24px rgba(0,43,92,.3)}
+.btn-regresar:focus-visible{outline:3px solid rgba(11,95,165,.35);outline-offset:2px}
+@media(max-width:480px){.btn-regresar{width:100%}}

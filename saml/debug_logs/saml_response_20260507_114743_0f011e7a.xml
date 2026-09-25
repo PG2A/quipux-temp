@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_55221307-3ac7-49a1-9a7d-f453df1da5c2" Version="2.0" IssueInstant="2026-05-07T16:47:43.384Z" Destination="https://devdocs.ucuenca.edu.ec/saml/accs.php" Consent="urn:oasis:names:tc:SAML:2.0:consent:unspecified" InResponseTo="ONELOGIN_b31833a82e5d0ad1e79ee44d17c9390066d819d3">
+  <Issuer xmlns="urn:oasis:names:tc:SAML:2.0:assertion">http://ADFS-PRUE.ucuenca.edu.ec/adfs/services/trust</Issuer>
+  <samlp:Status>
+    <samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>
+  </samlp:Status>
+  <Assertion xmlns="urn:oasis:names:tc:SAML:2.0:assertion" ID="_fdde540e-4523-4873-9fee-b0d948281cdf" IssueInstant="2026-05-07T16:47:43.383Z" Version="2.0">
+    <Issuer>http://ADFS-PRUE.ucuenca.edu.ec/adfs/services/trust</Issuer>
+    <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+      <ds:SignedInfo>
+        <ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
+        <ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>
+        <ds:Reference URI="#_fdde540e-4523-4873-9fee-b0d948281cdf">
+          <ds:Transforms>
+            <ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
+            <ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
+          </ds:Transforms>
+          <ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>
+          <ds:DigestValue>9YXo8NjTZX/JmenXiT88Xzdascf+Y/G8sbNnj51GJ1A=</ds:DigestValue>
+        </ds:Reference>
+      </ds:SignedInfo>
+      <ds:SignatureValue>QYk/PV3YF4mnyUuvJbuRhDJa9lKdCfxsA3KxCAGEi3nuWfASbKR2qWYBKRHgcydwCPlk1VkGFoNJJkHV5dT0kofdEVsIEMesOrsvEEDuOA9/4g20QsJWN6SnOIEoRCyMSfLWj+zozRdGTzH6zvrweiHH6CSFADlavzKMhornHIEmgxsKT6ehTlLWf4jjwikUUfkc5qSmUf1PYAL4jsHx2zDxKADKGSHoYGSRqINgSSNGoXqWyjQSk5ZVkJxUCyN3YG4Z6jpXFAXkaBURK/rp2M5/x7ljIk7dpo5WBgvWQF6e+L1aE45M4prAB3yjstrgsY0fptTKaxv7QVv30vIJ+k/fX6fQsKrUXLDTGctCRtFB8ecD8LKY74EUZcvj/mUy+05/6wMrqJL3w0G4x1F1FzNHMIzNUMikx0PuYv/ONhV0DBtdnlakTKzblUc8iuHK/9G7PZ8gcsdzIMubSh2I5n7p2HzbJUL7YpA0HsmIvHA+hTNpqQpVAqF0n0F5mWerk1+v+lmNENrrUYadfR79eV7Lf9dCpZ3ubUAq0iu+b88fOEjsNbqfpiIBdkaVlA8oSrmDde+pTjhnkC1UDONckwosdL12U/xoZ4ZI4Y6Jvh1zlDctMVkMV2KztXNL0x+ukYWZd1kaZytsqP7HU/er4THmgxwSthDPLHS8Q9qXj2E=</ds:SignatureValue>
+      <KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+        <ds:X509Data>
+          <ds:X509Certificate>MIIE7DCCAtSgAwIBAgIQMplx2wMHO69DP4DUG68fwTANBgkqhkiG9w0BAQsFADAyMTAwLgYDVQQDEydBREZTIFNpZ25pbmcgLSBBREZTLVBSVUUudWN1ZW5jYS5lZHUuZWMwHhcNMjYwNDIzMDQ1MjMzWhcNMjcwNDIzMDQ1MjMzWjAyMTAwLgYDVQQDEydBREZTIFNpZ25pbmcgLSBBREZTLVBSVUUudWN1ZW5jYS5lZHUuZWMwggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQCxfiX/lu5dx9xz5Dy5N57wGab2R5LeaceFPGNLpTixfVZpQOaTPkrUAkCam+esf+cNMvP8BmzG0i8rskCTYdIdiB7yrk9G8UN/Nxc8CD4xAhE94G36bI4O0Hr4H/+P3QdGQHY/Nj/PlyQThJkoiyftx3L2Vlv1fkuaEtJzjRJm2yVD2PJ1R+WLGCdxODn0xX2Skrt3ETKn3usuvgdFOMGU+eCoN31/0AtoJZBGda91ZSrzxAOO/ycqvlCvB/FvC6PRmNoGpK/m1xtOC8nm37PLskslFqxfM42RqvCDTicxy79q+jWSbLXrdS+jFNsEfoxw1yx3gNDxo+r7N/ArDReptJgRPWD+bHZ/aOkoKM/LIRJ+awFMTtP3upPRKZTM7zS6XSJIr1glDWYkKw3WnFW/ge4iyAjkuxU0J3eiXxbM0ydvmB6yumry/T3UP3DFqriijmSWvfTRKv+wv3P+IFy0mirheEnlQ3g9dT6VrJCXU55Q/OoYb/T5vKNtE79kFrGnKbLVOPNxSdL0fBekzdDK0y/Kol6roXNBxoUDBdt4xLX2mFTu0Jskot8LTt8StzyYQ8yWKeCpkxOU3QxInDUCnjvBl1YGCSkp6CVez1KSTqnYp6D5ACciC6+RuFMQW6F5AscdozvtHqGHdLXi+eCfYR2rb7vS0uVLs95puPPMWQIDAQABMA0GCSqGSIb3DQEBCwUAA4ICAQCXIE+EUmPd+79xHYz2/zzYhmUIEiaDXdgtwM64KztsGA920sQPWuakoFK5qBZ5FoGh50vmc9e1LE8YQFp1KeJZqFJsyUIvThR4HliPGfpxA8lxBGSELOyTPxkSqMqYpLVgYbmwFLTxHOlzLG5FqkZiASRzxkC680fUtCDrRKqcVJnbcntsVKAm9Fv7/+cMqlkVXevfvmEoQt6u/9hinpXLjhpiN3+W8vY6yXVm6nDCZKHCfgQ40qxfsDNzHcTKhrEfsP3RwJ+nim4E5k1mQb88h15dQCIgq9ltXh8H0WC3djWJLNn4tUobRioEZsym3QZ/XcaNvSrw8VMqTG8oxPclsaNKDUkSggcxxkQAUrTNR+/c+bEaK+TxqaqDfvOMRInkBeehsxn6eTNsnz1g4cwixfCouLShmrRzvHTCyvtXO37OuTIoL+25w2R1V+T5Bk6mWhXzOWyaQo/601lXCBQlEFsCAv3T16EgNPXNy9nhFGHIwJy4iW4VjC5v0FXt3ZkpPl2GKrX9YpAgGy8ypZVXlKcur6Rh58/5WsCx4OKu6CZPTo4DslKk3qJ+7ImYs+G9j3Gfqxo3jrYPINKNUCXRk4K0yhJpyaTYIg7UFruqquigjxpGjWOW2hN3tqVeqwWZaTdAT4II7JYrphPCvXgIBNHGUDl2Ir4JN2JWyWpxHw==</ds:X509Certificate>
+        </ds:X509Data>
+      </KeyInfo>
+    </ds:Signature>
+    <Subject>
+      <NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">pedro.gutierreza@ucuenca.edu.ec</NameID>
+      <SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
+        <SubjectConfirmationData InResponseTo="ONELOGIN_b31833a82e5d0ad1e79ee44d17c9390066d819d3" NotOnOrAfter="2026-05-07T16:52:43.384Z" Recipient="https://devdocs.ucuenca.edu.ec/saml/accs.php"/>
+      </SubjectConfirmation>
+    </Subject>
+    <Conditions NotBefore="2026-05-07T16:47:43.368Z" NotOnOrAfter="2026-05-07T17:47:43.368Z">
+      <AudienceRestriction>
+        <Audience>https://devdocs.ucuenca.edu.ec/saml/metadata.php</Audience>
+      </AudienceRestriction>
+    </Conditions>
+    <AttributeStatement>
+      <Attribute Name="E-Mail Address">
+        <AttributeValue>pedro.gutierreza@ucuenca.edu.ec</AttributeValue>
+      </Attribute>
+    </AttributeStatement>
+    <AuthnStatement AuthnInstant="2026-05-07T16:47:43.289Z" SessionIndex="_fdde540e-4523-4873-9fee-b0d948281cdf">
+      <AuthnContext>
+        <AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport</AuthnContextClassRef>
+      </AuthnContext>
+    </AuthnStatement>
+  </Assertion>
+</samlp:Response>

@@ -1,0 +1,8 @@
+bodega/tmp/
+bodega/respaldos/
+.env
+.idea
+*.delete
+*.log
+vendor/
+lib_backup/

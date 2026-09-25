@@ -1,0 +1,74 @@
+<?php
+// This file is part of Quipux – Document Management System
+//
+// Quipux is free software and is currently under a process of technical
+// modernization and functional improvement carried out by
+// EXDUCERE ONLINE CIA. LTDA., as part of the development of a new version
+// of the Quipux platform.
+//
+// Quipux is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Quipux is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Quipux. If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * @package    listas
+ * @author      2025 Casen Xu<casenxu@exducereonline.com>
+ * @copyright  EXDUCERE ONLINE <@link https://exducereonline.com>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+session_start();
+include_once(dirname(__DIR__, 2).'/rec_session.php');
+
+$sqlDepePadre = "select
+                        depe_codi,
+                        depe_nomb,
+                        depe_codi_padre
+                     from
+                        dependencia
+                     where
+                        depe_estado=1 and inst_codi = ".$_GET["codInst"].
+                        " and depe_codi = coalesce(depe_codi_padre,depe_codi) order by depe_nomb";
+    $rsDepePadre=$db->conn->query($sqlDepePadre);
+   // $menu_depePadre = "<ul>";
+    while(!$rsDepePadre->EOF)
+    {
+        //$menu_depePadre .= "</a><div name='mnu_depeHijo_".$rsDepePadre->fields["DEPE_CODI"]."' id='mnu_depeHijo_".$rsDepePadre->fields["DEPE_CODI"]."'  class='menu'>";
+        $sqlDepeHijo = "select
+                            count(depe_codi) as depe_codi
+                        from
+                            dependencia
+                        where
+                            depe_estado=1 and depe_codi_padre = ".$rsDepePadre->fields["DEPE_CODI"].
+                            " and depe_codi <> depe_codi_padre";
+        $rsDepeHijo=$db->conn->query($sqlDepeHijo);
+        $menu_depePadre .= '<li><a href="javascript:;" onclick="buscar_depeHijo('.$rsDepePadre->fields["DEPE_CODI"].');">';
+        $menu_depePadre .= $rsDepePadre->fields["DEPE_NOMB"];
+        if($rsDepeHijo->fields["DEPE_CODI"]!='0')
+                $menu_depePadre .= " (".$rsDepeHijo->fields["DEPE_CODI"].")";
+        $menu_depePadre .= "</a>";
+        if($rsDepeHijo->fields["DEPE_CODI"]!='0')
+        {
+            $menu_depePadre .= "<ul id='mnu_depeHijo_".$rsDepePadre->fields["DEPE_CODI"]."' class='menu'>";
+            $menu_depePadre .= "</ul>";
+        }
+        $menu_depePadre .= "</li>";
+        //Llamada recursiva a la funcion para obtener
+        //$depe_codi = $rsDepePadre->fields["DEPE_CODI"];
+        //obtenerDependencia($depe_codi, $db);
+        $rsDepePadre->MoveNext();
+    }
+   // $menu_depePadre .= "</ul>";
+    echo $menu_depePadre;
+    //echo htmlspecialchars($menu_depePadre);
+?>
+

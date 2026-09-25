@@ -1,0 +1,66 @@
+<?php
+// This file is part of Quipux – Document Management System
+//
+// Quipux is free software and is currently under a process of technical
+// modernization and functional improvement carried out by
+// EXDUCERE ONLINE CIA. LTDA., as part of the development of a new version
+// of the Quipux platform.
+//
+// Quipux is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Quipux is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Quipux. If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * @package    catalogos
+ * @author      2025 Casen Xu<casenxu@exducereonline.com>
+ * @copyright  EXDUCERE ONLINE <@link https://exducereonline.com>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+session_start();
+include_once(dirname(__DIR__, 2).'/rec_session.php');
+//if($_SESSION["usua_admin_sistema"]!=1) die("");
+
+require_once(dirname(__DIR__, 2)."/funciones.php"); //para traer funciones p_get y p_post
+include_once(dirname(__DIR__, 2).'/funciones_interfaz.php');
+include_once(dirname(__DIR__, 2).'/obtenerdatos.php');
+
+if (isset($_POST["codigo"]))
+$id_codigo = (int)limpiar_numero($_POST['codigo']);
+else
+    $id_codigo=0;
+
+ 
+$sql="select id_padre,nombre from ciudad where id = $id_codigo";
+
+$rsCmbPais = $db->conn->Execute($sql);
+if (!$rsCmbPais->EOF){    
+        $codigo = $rsCmbPais->fields["ID_PADRE"];  
+        
+        //echo '<input type="hidden" name="txt_id_padre" id="txt_id_padre" value="'.$codigo.'" size="20">';
+   }//if
+
+   if ($codigo=='')
+       $codigo = 0;
+       
+           $sql="select nombre, id from ciudad";
+           if ($codigo!='')
+           $sql.=" where id not in ($id_codigo)";
+           $sql.=" order by nombre asc";
+           
+            $rsCiudad=$db->conn->query($sql);
+            //print_r($rsCiudad);
+            if($rsCiudad) print $rsCiudad->GetMenu2("txt_id_padre", $codigo, "0:&lt;&lt; Seleccione &gt;&gt;", false,"","class='select' id='txt_id_padre'  style='width: 300px;'");
+                
+   
+
+?>

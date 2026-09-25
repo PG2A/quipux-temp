@@ -1,0 +1,57 @@
+#header{background:#ffffff !important;}
+#header h1,#header h1 font{color:#41485a !important;font-family:"Hanken Grotesk",Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif !important;font-weight:600 !important;font-size:22px !important;letter-spacing:.3px !important;margin:0}
+
+#div_cuerpo > table{width:96% !important;margin:0 auto !important}
+#div_cuerpo > table td > table{width:100% !important}
+#div_cuerpo table tr:nth-child(even) td{background-color:#f3f6fc}
+#div_cuerpo table tr:hover td{background-color:#e3ecff}
+
+table.selectCargo{background:#0b5fa5;border-radius:8px;margin:-8px 4px;width:calc(100% - 8px) !important}
+table.selectCargo td{color:#fff;font-weight:600;font-size:12px;padding:4px 2px;white-space:nowrap}
+select.selectCargo{background:#fff !important;color:#0b5fa5 !important;font-weight:600;border:none !important;border-radius:6px !important;padding:4px 10px !important;height:auto !important;width:auto !important;max-width:100% !important;margin-right:8px}
+
+#nav-big .navbtn{background:none !important;box-shadow:none !important;display:inline-flex !important;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:auto !important;height:auto !important;min-width:52px;padding:5px 10px;border-radius:10px;text-decoration:none;transition:all .15s ease}
+#nav-big .navbtn .navico{width:22px;height:22px}
+#nav-big .navbtn span{font-size:11px;font-weight:600;line-height:1;color:#333}
+#nav-big .navbtn-help .navico{color:#e0a800}
+#nav-big .navbtn-exit .navico{color:#dc3545}
+#nav-big .navbtn:hover{background:rgba(48,45,126,.08) !important;transform:translateY(-1px)}
+
+.verrad-banner{margin:0 0 6px}
+.verrad-banner table{width:100%;border-collapse:collapse}
+.verrad-banner .titulos4{background:linear-gradient(90deg,#0b5fa5,#0a4f8a) !important;color:#fff !important;font-weight:600;font-size:13px;padding:10px 16px !important;vertical-align:middle;border:none !important;white-space:nowrap}
+.verrad-banner .vb-label{font-weight:400;opacity:.82;margin-right:6px}
+.verrad-banner .vb-val{font-weight:600}
+.verrad-banner .vb-num{display:inline-block;background:#fff;color:#0b5fa5;font-weight:700;padding:2px 12px;border-radius:6px;letter-spacing:.3px}
+.linkExpandido.verrad-heading{color:#0b5fa5 !important;font-size:16px !important;font-weight:600 !important;padding:10px 2px !important;letter-spacing:.2px}
+@media(max-width:760px){.verrad-banner .titulos4{display:block;width:100% !important;white-space:normal;border-bottom:1px solid rgba(255,255,255,.15) !important}}
+
+.visor-documento{width:100% !important;height:78vh !important;min-height:520px !important;overflow:auto !important;border:none !important;background:#fff}
+@media(max-width:760px){.visor-documento{height:70vh !important;min-height:420px !important}}
+
+.barra_busqueda_top{margin-bottom:14px}
+
+table.admin-card{width:100% !important;max-width:560px;margin:0 auto 18px;border-collapse:separate;border-spacing:0 !important;background:#fff;border:1px solid #b9c2d6;border-radius:10px;overflow:hidden;box-shadow:0 2px 10px rgba(11,28,48,.08)}
+table.admin-card td.titulos4{background:#0b5fa5 !important;color:#fff !important;font-weight:600;font-size:13px;letter-spacing:.3px;padding:11px 16px !important;border:none !important}
+table.admin-card td.titulos4 strong{font-weight:600}
+table.admin-card td.listado2{padding:0 !important;background:#fff !important;border:none !important}
+table.admin-card td.listado2 a.vinculos{display:block;padding:10px 18px;color:#0b1c30 !important;text-decoration:none !important;font-size:12.5px;font-weight:500;border-top:1px solid #f3f6fc;transition:background .12s ease,padding-left .12s ease,color .12s ease}
+table.admin-card tr:first-child+tr td.listado2 a.vinculos{border-top:none}
+table.admin-card td.listado2 a.vinculos:hover{background:#e3ecff;padding-left:24px;color:#0b5fa5 !important}
+table.admin-card td.listado2 select{background:#fff;color:#0b1c30;border:1px solid #b9c2d6;border-radius:6px;padding:6px 10px;margin:14px auto;max-width:92%}
+table.admin-card td.listado2 a.vinculos b{font-weight:500}
+table.admin-card td.listado2 input.botones{margin:14px auto}
+@media(max-width:760px){table.admin-card{width:94% !important;max-width:none}}
+
+.comprobante-wrap{padding:26px 14px;background:#eef2f8;min-height:100vh;box-sizing:border-box}
+table.comprobante-card{max-width:430px}
+.comprobante-body{padding:20px 22px 22px;text-align:center}
+.comprobante-num{display:inline-block;background:#eaf2fb;color:#0b5fa5;font-weight:700;font-size:14px;letter-spacing:.3px;padding:7px 18px;border-radius:6px;word-break:break-all;max-width:100%;box-sizing:border-box}
+.comprobante-hint{color:#5a6478;font-size:12px;line-height:1.5;margin:12px 0 18px}
+.comprobante-acciones{display:flex;flex-direction:column;gap:10px}
+.comprobante-acciones input.botones_largo{width:100%;margin:0 !important;padding:10px 12px !important;font-size:12.5px;min-height:0}
+.comprobante-pie{margin-top:18px;padding-top:16px;border-top:1px solid #e6ebf4}
+.comprobante-pie input.botones_largo{background:#fff !important;color:#0b5fa5 !important;border:1px solid #b9c2d6 !important;min-width:130px;margin:0 !important;padding:8px 16px !important}
+.comprobante-pie input.botones_largo:hover{background:#e3ecff !important;box-shadow:none !important}
+@media(max-width:520px){.comprobante-wrap{padding:16px 10px}.comprobante-body{padding:16px 14px 18px}}
+

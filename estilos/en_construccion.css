@@ -1,0 +1,21 @@
+main.wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:40px 16px 64px}
+.obra{width:100%;max-width:640px;border-radius:20px;padding:32px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:14px}
+.obra-ic{width:64px;height:64px;border-radius:18px;background:var(--surface-container);display:flex;align-items:center;justify-content:center}
+.obra-ic svg{width:30px;height:30px;fill:none;stroke:var(--primary);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.obra-badge{display:inline-block;padding:5px 14px;border-radius:999px;background:#fff7e6;border:1px solid #f0c66b;color:#8a5a00;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.obra h1{font-size:24px;line-height:32px;color:var(--primary)}
+.obra p{font-size:15px;line-height:24px;color:var(--on-surface-variant);max-width:520px}
+.obra .obra-nota{font-size:13px;line-height:21px;color:var(--on-surface-variant);opacity:.85}
+.obra-acciones{display:flex;flex-direction:column;gap:12px;width:100%;margin-top:6px}
+.obra-acciones .btn{width:100%;text-decoration:none}
+.obra-acciones .icn{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.btn-obra-primary{background:var(--primary);color:#fff}
+.btn-obra-primary:hover{background:var(--primary-container)}
+.btn-obra-ghost{background:#fff;color:var(--primary);border:1px solid var(--outline)}
+.btn-obra-ghost:hover{background:var(--surface-container)}
+@media (min-width:768px){
+    .obra{padding:44px 40px}
+    .obra h1{font-size:30px;line-height:38px}
+    .obra-acciones{flex-direction:row;justify-content:center;width:auto}
+    .obra-acciones .btn{width:auto}
+}

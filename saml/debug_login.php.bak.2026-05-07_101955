@@ -1,0 +1,63 @@
+<?php
+session_start();
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+$settings = require __DIR__ . '/settings.php';
+
+/*
+|--------------------------------------------------------------------------
+| Seguridad básica del debug
+|--------------------------------------------------------------------------
+| Ajusta esta lista con tu IP pública si quieres bloquear a terceros.
+| Puedes obtener tu IP desde el navegador buscando "my ip".
+*/
+$allowedIps = [
+    // 'TU.IP.PUBLICA.AQUI',
+];
+
+$clientIp = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+$clientIp = explode(',', $clientIp)[0];
+$clientIp = trim($clientIp);
+
+//if (!empty($allowedIps) && !in_array($clientIp, $allowedIps, true)) {
+//    http_response_code(403);
+//    exit('Acceso no permitido para debug SAML.');
+//}
+
+/*
+|--------------------------------------------------------------------------
+| Usuario esperado
+|--------------------------------------------------------------------------
+| Aquí puedes quemar el correo/UPN válido del usuario de ADFS.
+| No pongas contraseña.
+*/
+$expectedUser = 'pedro.gutierreza@ucuenca.edu.ec'; // CAMBIAR
+
+$_SESSION['saml_debug'] = true;
+$_SESSION['saml_debug_expected_user'] = strtolower(trim($expectedUser));
+$_SESSION['saml_debug_started_at'] = date('Y-m-d H:i:s');
+
+$auth = new OneLogin\Saml2\Auth($settings);
+
+/*
+|--------------------------------------------------------------------------
+| RelayState
+|--------------------------------------------------------------------------
+| Solo para identificar que el flujo viene del debug.
+|--------------------------------------------------------------------------
+*/
+$returnTo = 'https://devdocs.ucuenca.edu.ec/saml/debug_acs.php?debug=1';
+
+/*
+|--------------------------------------------------------------------------
+| Parámetros opcionales para ADFS
+|--------------------------------------------------------------------------
+| login_hint puede ser ignorado por ADFS, pero no rompe el flujo.
+|--------------------------------------------------------------------------
+*/
+$params = [
+    'login_hint' => $expectedUser,
+];
+
+$auth->login($returnTo, $params, false, false, true);
