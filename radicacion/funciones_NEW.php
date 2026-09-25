@@ -109,6 +109,22 @@ $carpeta = $_POST['carpeta'] ?? $_GET['carpeta'] ?? '';
         if (ltrim($documento_us1.$documento_us2.$concopiaa," -1234567890") != "")
                 die("Error: Usted est&aacute; ingresando c&oacute;digo no v&aacute;lido.");
 
+        // Documento de periodo jerárquico: los "Para" de la institución deben estar
+        // permitidos por las reglas por nivel del remitente (o de quien elabora) y se
+        // agregan en copia el jefe / nivel intermedio que la regla exige.
+        include_once(dirname(__DIR__).'/include/periodos/Jerarquia.php');
+        if ($_SESSION["tipo_usuario"]==1 && jerarquia_documento_es_jerarquico($db, $nurad)) {
+            $jer_val = jerarquia_validar_destinatarios($db, jerarquia_origen_documento($db, $documento_us2), $documento_us1);
+            if (!empty($jer_val['no_permitidos'])) {
+                include_once(dirname(__DIR__).'/funciones_interfaz.php');
+                die(html_error("No se guard&oacute; el documento: es de periodo jer&aacute;rquico y no puede enviarse a "
+                    .htmlspecialchars(jerarquia_nombres($db, $jer_val['no_permitidos']), ENT_QUOTES, 'UTF-8')
+                    ." seg&uacute;n el nivel del remitente. Regrese y quite ese destinatario."));
+            }
+            foreach ($jer_val['copias'] as $jer_c)
+                if (strpos($concopiaa, "-$jer_c-") === false) $concopiaa .= "-$jer_c-";
+        }
+
         $rad->radiCuentai = trim(limpiar_sql($_POST['referencia'] ?? ''));
         
         if (preg_match('/^\d{4}-\d{2}-\d{2}/', $fecha_doc)) {
@@ -501,9 +517,8 @@ $carpeta = $_POST['carpeta'] ?? $_GET['carpeta'] ?? '';
         }
         $var_envio = "../verradicado.php?verrad=$nurad&textrad=$textrad&menu_ver=3&irVerRad=1&tipo_ventana=popup&refeResponder=$txt_refeResponder&carpeta=$carpeta";
     } else {
-        if ($opc_grab!=3)
-         echo "<script language='javascript'>vista_previa();</script>";
-        
+        // Se graba el documento y se recarga NEW.php directamente. Antes se abría además una ventana
+        // emergente con documento_online.php, innecesaria para continuar editando o cargar anexos.
         $var_envio = "NEW.php?ent=$ent&nurad=$nurad&textrad=$textrad&radi_lista_dest=$radi_lista_dest&radi_lista_nombre=$radi_lista_nombre&accion=Editar&refeResponder=$txt_refeResponder";//&mensaje=$mensaje";
     }  
     echo "<script language='javascript'>window.location='$var_envio'; </script>";

@@ -72,7 +72,9 @@ function create_sidebar_section($id, $name, $items, $icon = ''){
     return $html;
 }
 
-function create_sidebar_item($depth, $name, $description, $link = '', $icon = '') {
+// $badge: contador para enlaces sin carpeta (depth 0), p. ej. solicitudes pendientes;
+// se pinta con el mismo estilo que el de las bandejas.
+function create_sidebar_item($depth, $name, $description, $link = '', $icon = '', $badge = null) {
     $html  = '';
 
     $description = isset($description) ? str_replace("*usuario*", $_SESSION["usua_nomb"], $description) : '';
@@ -108,6 +110,11 @@ function create_sidebar_item($depth, $name, $description, $link = '', $icon = ''
         $html .= html_writer::tag('span', $count, array(
                 'class' => 'section-item-badge',
                 'id' => 'spam_carpeta_'.$depth
+        ));
+    } elseif ($depth == 0 and $badge !== null) {
+        $html .= html_writer::tag('span', (int)$badge, array(
+                'class' => 'section-item-badge',
+                'id' => 'spam_' . preg_replace('/[^a-z0-9]+/i', '_', strtolower(strip_tags($name)))
         ));
     }
 
@@ -191,6 +198,30 @@ function print_menu_sidebar() {
                 $inbox_group .= ",14";
             }
 
+            // Bandejas de consulta de subrogación (sólo lectura). Cada una se
+            // muestra a quien tiene documentos en ella: la 17 al titular del
+            // puesto y la 18 al subrogante. Sirven durante el período y también
+            // después de finalizado, por eso no se filtra por estado.
+            //
+            // No aparecen mientras se actúa bajo un contexto de subrogación: son
+            // el registro personal de cada usuario, no del puesto que ocupa
+            // temporalmente. En ese contexto la identidad activa es la del cargo,
+            // así que mostrarlas daría el histórico del titular a quien lo cubre.
+            if (empty($_SESSION["subrogacion_codi"])) {
+                $usua_codi_actual = (int)$_SESSION["usua_codi"];
+                $rsSubr = $db->conn->query(
+                    "select count(case when s.usua_subrogado  = $usua_codi_actual then 1 end) as como_titular
+                          , count(case when s.usua_subrogante = $usua_codi_actual then 1 end) as como_subrogante
+                       from radicado_subrogacion rs
+                       join usuarios_subrogacion s on s.usua_subrogacion_codi = rs.usua_subrogacion_codi
+                      where rs.tipo = 'T'
+                        and (s.usua_subrogado = $usua_codi_actual or s.usua_subrogante = $usua_codi_actual)");
+                if ($rsSubr && !$rsSubr->EOF) {
+                    if ((int)$rsSubr->fields["COMO_TITULAR"]    > 0) $inbox_group .= ",17";
+                    if ((int)$rsSubr->fields["COMO_SUBROGANTE"] > 0) $inbox_group .= ",18";
+                }
+            }
+
             $items_inbox = '';
             $sql = "select * from carpeta where carp_codi in ($inbox_group) order by carp_orden asc";
             $rs = $db->conn->query($sql);
@@ -202,7 +233,9 @@ function print_menu_sidebar() {
 
             // Get another inbox
             $items_other_inbox = '';
-            $inbox_group .= ",14";
+            // 14, 17 y 18 nunca van en "Otras Bandejas": o ya se listaron arriba,
+            // o este usuario no tiene registros en ellas y no debe verlas.
+            $inbox_group .= ",14,17,18";
             $sql = "select * from carpeta where carp_codi not in ($inbox_group) order by carp_orden asc";
             $rs = $db->conn->query($sql);
             while($rs && !$rs->EOF) {
@@ -236,6 +269,18 @@ function print_menu_sidebar() {
         // Menu default
         $descTRDpl = "Carpetas Virtuales";
         $items_admin = create_sidebar_item(0, "Administraci&oacute;n", "Opciones de administraci&oacute;n del sistema", "Administracion/formAdministracion.php");
+        // Aprobadores de ciudadanos (RQT-7): acceso directo con el número de pendientes
+        if (($_SESSION["perm_aprobar_ciudadano"] ?? 0) == 1 || ($_SESSION["usua_admin_sistema"] ?? 0) == 1) {
+            include_once(__DIR__.'/include/ciudadanos/SolicitudCiudadano.php');
+            if (SolicitudCiudadano::disponible($db)) {
+                $sol_ciu = new SolicitudCiudadano($db);
+                // Se muestra como una bandeja más: nombre a la izquierda y el número de
+                // pendientes en el badge de la derecha.
+                $items_admin .= create_sidebar_item(0, "Solicitudes de ciudadanos",
+                    "Ciudadanos registrados desde la b&uacute;squeda de destinatarios pendientes de aprobaci&oacute;n",
+                    "Administracion/ciudadanos_solicitud/aprobacion_ciudadanos.php", '', $sol_ciu->contarPendientes());
+            }
+        }
         if ($_SESSION["depe_codi"]!=0) { //Si no tiene definida el area no puede realizar acciones
             if ($_SESSION["usua_perm_trd"]==1) {
                 $items_admin .= create_sidebar_item(0, $descTRDpl, "Administraci&oacute;n de $descTRDpl", "tipo_documental/menu_trd.php");

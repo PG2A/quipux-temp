@@ -85,6 +85,105 @@ if(!isset($_REQUEST['usr_area_responsable']) || $_REQUEST['usr_area_responsable'
 
 
 
+// El puesto sólo se elige del catálogo (cargo). Si el cargo_id enviado pertenece
+// al área, el perfil (Jefe/Normal) y el puesto se toman del catálogo, no de lo que
+// llegue en el POST: así no se puede alterar escribiendo o cambiando el combo.
+// El select de perfil viaja deshabilitado (lo gobierna el puesto), así que puede
+// no llegar en el POST: se asegura un valor por defecto para evitar avisos.
+if (!isset($usr_perfil) || $usr_perfil === '') $usr_perfil = 0;
+$cargo_id_post = 0 + ($cargo_id ?? 0);
+$cargo_catalogo = null;
+if ($cargo_id_post > 0) {
+    $rsCat = $db->conn->query("select cargo_nombre, cargo_cabecera, cargo_tipo, cargo_nivel
+                                 from cargo
+                                where cargo_id = $cargo_id_post
+                                  and depe_codi = ".(0 + ($usr_depe ?? 0))."
+                                  and inst_codi = ".(0 + $_SESSION["inst_codi"]));
+    if ($rsCat && !$rsCat->EOF) {
+        $cargo_catalogo   = $rsCat->fields;
+        $usr_cargo          = $cargo_catalogo["CARGO_NOMBRE"];
+        $usr_cargo_cabecera = ($cargo_catalogo["CARGO_CABECERA"] !== null && trim($cargo_catalogo["CARGO_CABECERA"]) !== "")
+                              ? $cargo_catalogo["CARGO_CABECERA"] : $cargo_catalogo["CARGO_NOMBRE"];
+        $usr_perfil         = (int)$cargo_catalogo["CARGO_TIPO"];   // gobierna la validación de Jefe único
+    }
+}
+
+// No puede haber dos cuentas activas de la misma persona (cédula) con el MISMO
+// puesto. Los cargos múltiples usan puestos distintos; misma cédula + mismo
+// cargo es un duplicado (un cargo pertenece a una sola área).
+if ($usr_estado != 0 && trim($usr_cedula) != '' && $cargo_id_post > 0) {
+    $ced_qs = $db->conn->qstr(trim($usr_cedula));
+    $sqlDup = "select count(*) as n from usuarios
+                where usua_cedula = $ced_qs and usua_esta = 1
+                  and cargo_id = $cargo_id_post
+                  and usua_codi <> " . (0 + $usr_codigo);
+    $rsDup = $db->conn->query($sqlDup);
+    if ($rsDup && !$rsDup->EOF && (0 + $rsDup->fields['N']) > 0) {
+        include "./adm_usuario.php";
+        die("<script>alert('Ya existe una cuenta con esta cédula en el mismo puesto. No puede haber dos cuentas de la misma persona en el mismo puesto.')</script>");
+    }
+}
+
+// Al CREAR una cuenta se valida contra la estructura orgánica (sólo en alta):
+//  - Área nueva DE la estructura orgánica: la persona (cédula) no puede tener ya
+//    otro puesto activo en la estructura orgánica.
+//  - Área nueva FUERA de la estructura orgánica: la persona debe tener ya un
+//    puesto activo que sí forme parte de la estructura orgánica.
+if ($accion == 1 && trim($usr_cedula) != '') {
+    $ced_qs = $db->conn->qstr(substr(trim($usr_cedula), 0, 10));
+    $area_nueva_est = (int)$db->conn->GetOne(
+        "select count(*) from dependencia
+          where depe_codi = " . (0 + ($usr_depe ?? 0)) . " and estructura_organica = true") > 0;
+    $rsEst = $db->conn->query(
+        "select u.usua_cargo, depe_ruta(u.depe_codi) as area
+           from usuarios u join dependencia d on d.depe_codi = u.depe_codi
+          where u.usua_cedula = $ced_qs and u.usua_esta = 1
+            and d.estructura_organica = true
+          order by u.usua_codi limit 1");
+    $tiene_puesto_est = ($rsEst && !$rsEst->EOF);
+
+    $msg_est = "";
+    if ($area_nueva_est && $tiene_puesto_est) {
+        $msg_est = "La persona ya tiene un puesto activo en la estructura orgánica ("
+                 . trim($rsEst->fields['USUA_CARGO']) . " - " . trim($rsEst->fields['AREA']) . "). "
+                 . "Sólo se le puede crear otra cuenta en un área que no forme parte de la estructura orgánica.";
+    } elseif (!$area_nueva_est && !$tiene_puesto_est) {
+        $msg_est = "El área elegida no forma parte de la estructura orgánica. Para crear esta cuenta, "
+                 . "la persona debe tener primero un puesto activo en un área de la estructura orgánica.";
+    }
+
+    if ($msg_est != "") {
+        include "./adm_usuario.php";
+        // Aviso con SweetAlert (el mismo del cierre de sesión); el formulario
+        // queda con los datos ingresados.
+        die("<script>(function () {
+                var msg = " . json_encode($msg_est, JSON_UNESCAPED_UNICODE) . ";
+                function mostrar(S) {
+                    S.fire({
+                        title: 'No se puede crear este usuario',
+                        text: msg,
+                        icon: 'error',
+                        confirmButtonText: 'Aceptar',
+                        confirmButtonColor: '#002B5C',
+                        // Sin esto Swal pone height:auto al html/body de la ventana
+                        // principal y el diseño de frames (alto 100%) queda en blanco.
+                        heightAuto: false
+                    });
+                }
+                // El formulario está en un iframe: se usa el Swal de la ventana
+                // principal para que cubra toda la pantalla.
+                var S = null;
+                try { S = window.top.Swal; } catch (e) {}
+                if (S) { mostrar(S); return; }
+                var js = document.createElement('script');
+                js.src = '../../js/sweetalert2.all.min.js';
+                js.onload  = function () { mostrar(window.Swal); };
+                js.onerror = function () { alert(msg); };
+                document.head.appendChild(js);
+             })();</script>");
+    }
+}
+
 if($usr_estado!=0) {
     if (!isset($sql2)) $sql2 = "";
 	if ($accion == 2) {
@@ -251,12 +350,22 @@ if ($usr_estado==1){
 if (trim($usr_perfil)){
     $record["CARGO_TIPO"] = limpiar_sql(trim($usr_perfil));
 }
-else{    
-    $subrogacion = usrMensajeSubrogacion($db,$usr_codigo,"perfil");    
+else{
+    $subrogacion = usrMensajeSubrogacion($db,$usr_codigo,"perfil");
     if ($subrogacion==" (Subrogado)")
         $record["CARGO_TIPO"]  = 1;
     else
-        $record["CARGO_TIPO"] = 0;       
+        $record["CARGO_TIPO"] = 0;
+}
+
+// Puesto del catálogo (cargo). Se guarda cargo_id sólo si el puesto pertenece al
+// área (validado arriba en $cargo_catalogo); si no, queda NULL (la FK no admite 0).
+// El nivel del puesto va a usuarios.nivel_jerarquico.
+$record["CARGO_ID"] = "null";
+if ($cargo_catalogo !== null) {
+    $record["CARGO_ID"] = $cargo_id_post;
+    $niv = $cargo_catalogo["CARGO_NIVEL"];
+    $record["NIVEL_JERARQUICO"] = ($niv === null || $niv === "") ? "null" : (0 + $niv);
 }
 if ($usr_email=='' || $usr_email==0) $graba_usr = 0;
 $record["USUA_EMAIL"]           = $db->conn->qstr(limpiar_sql(trim($ciud->caracterEspecial($usr_email))));
@@ -264,6 +373,21 @@ $record["USUA_OBS"]             = $db->conn->qstr(limpiar_sql(trim($ciud->caract
 if($codi_ciudad != "" or $codi_ciudad != 0)
     $record["CIU_CODI"]         = limpiar_sql(trim($codi_ciudad));
 $record["USUA_ESTA"]            = limpiar_sql(trim($usr_estado));
+
+// Vigencia de la cuenta (fecha inicio / fin). Formato YYYY-MM-DD; vacío = sin límite.
+// Fuera de este rango la cuenta no puede usarse (usuario_vigente()) y el cron
+// cron/procesar_vigencia_usuarios.php la desactiva al pasar la fecha fin.
+$vig_desde = trim((string)($usr_vig_desde ?? ''));
+$vig_hasta = trim((string)($usr_vig_hasta ?? ''));
+$es_fecha = function ($f) { return (bool)preg_match('/^\d{4}-\d{2}-\d{2}$/', $f) && checkdate((int)substr($f,5,2), (int)substr($f,8,2), (int)substr($f,0,4)); };
+if ($vig_desde !== '' && !$es_fecha($vig_desde)) $vig_desde = '';
+if ($vig_hasta !== '' && !$es_fecha($vig_hasta)) $vig_hasta = '';
+if ($vig_desde !== '' && $vig_hasta !== '' && $vig_hasta < $vig_desde) {
+    include "./adm_usuario.php";
+    die("<script>alert('La fecha fin no puede ser anterior a la fecha inicio.')</script>");
+}
+$record["USUA_VIGENCIA_DESDE"] = ($vig_desde !== '') ? $db->conn->qstr($vig_desde) : "null";
+$record["USUA_VIGENCIA_HASTA"] = ($vig_hasta !== '') ? $db->conn->qstr($vig_hasta) : "null";
 $record["USUA_NUEVO"]           = 1;
 
 $record["USUA_DIRECCION"]       = $db->conn->qstr(limpiar_sql(trim($ciud->caracterEspecial($usr_direccion))));

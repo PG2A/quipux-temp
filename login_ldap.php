@@ -78,12 +78,17 @@ function autenticar($user, $password) {
         if (strpos($login, 'U') !== 0) {
             $login = 'U' . $login;
         }
+        // Se consulta la tabla unificada 'usuario' (funcionarios + ciudadanos) y no
+        // 'usuarios' (solo funcionarios): con la segunda los ciudadanos, que viven
+        // en 'ciudadano', nunca podían iniciar sesión. Si una misma cédula tiene
+        // cuenta de funcionario y de ciudadano (ambas con login 'U'+cédula) se
+        // prueban en ese orden y se acepta la primera cuya contraseña coincida.
         $sql = "
-            SELECT u.usua_codi, u.usua_login, u.usua_pasw, u.depe_codi, u.usua_tipo
-            FROM usuarios u
+            SELECT u.usua_codi, u.usua_login, u.usua_pasw, u.depe_codi, u.tipo_usuario
+            FROM usuario u
             WHERE UPPER(u.usua_login) = ?
               AND u.usua_esta = 1
-            LIMIT 1
+            ORDER BY u.tipo_usuario ASC, u.usua_codi ASC
         ";
 
         $rs = $db->conn->Execute($sql, array($login));
@@ -92,31 +97,30 @@ function autenticar($user, $password) {
         $md5_26  = substr($passwordMd5, 0, 26);
         $md5_26_bug = substr($passwordMd5, 1, 26); // Support passwords corrupted by the legacy index-1 bug
 
-        error_log("DEBUG - Usuario buscado: " . $login);
-        error_log("DEBUG - SQL ejecutado: " . $sql);
-        error_log("DEBUG - Resultado EOF: " . ($rs->EOF ? 'true' : 'false'));
-        if (!$rs->EOF) {
-            error_log("DEBUG - Hash en BD: " . $rs->fields['USUA_PASW']);
-            error_log("DEBUG - Hash calculado (26): " . $md5_26);
-            error_log("DEBUG - Hash calculado (32): " . $md5_32);
-            error_log("DEBUG - Hash calculado (26-bug): " . $md5_26_bug);
-        }
-
         if (!$rs || $rs->EOF) return false;
 
-        $hashDb  = $rs->fields['USUA_PASW'];
-
-        if (!($hashDb === $md5_26 || $hashDb === $md5_32 || $hashDb === $md5_26_bug)) {
-            return false;
+        $cuenta = null;
+        while (!$rs->EOF) {
+            $hashDb = (string)($rs->fields['USUA_PASW'] ?? '');
+            if ($hashDb !== '' && ($hashDb === $md5_26 || $hashDb === $md5_32 || $hashDb === $md5_26_bug)) {
+                $cuenta = $rs->fields;
+                break;
+            }
+            $rs->MoveNext();
         }
 
+        if ($cuenta === null) return false;
+
         // Variables de sesión típicas que usa Quipux
-        $_SESSION['user']         =  $rs->fields['USUA_LOGIN'];
-        $_SESSION['krd']          =  $rs->fields['USUA_LOGIN'];
+        $_SESSION['user']         =  $cuenta['USUA_LOGIN'];
+        $_SESSION['krd']          =  $cuenta['USUA_LOGIN'];
         $_SESSION['drd']          =  $md5_32;
-        $_SESSION['depe_codi']    =  $rs->fields['DEPE_CODI'];
-        $_SESSION['tipo_usuario'] =  $rs->fields['USUA_TIPO'];
+        $_SESSION['depe_codi']    =  $cuenta['DEPE_CODI'];
+        $_SESSION['tipo_usuario'] =  (int)$cuenta['TIPO_USUARIO'];
         $_SESSION['access']       = 1;
+        // Cuenta concreta que validó la contraseña, para que login.php cargue los
+        // datos de esa misma fila y no de otra que comparta el login.
+        $_SESSION['usua_codi_autenticado'] = (int)$cuenta['USUA_CODI'];
 
 
 //        var_dump($_SESSION['krd']);

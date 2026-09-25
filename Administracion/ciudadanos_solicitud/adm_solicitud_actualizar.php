@@ -124,7 +124,7 @@ if($_POST["sol_accion"] == 1)
     $recordusuarios["usua_cargo"]       = $db->conn->qstr(limpiar_sql(trim($ciud->caracterEspecial($_POST["ciu_cargo"]))));
     $recordusuarios["inst_codi"]        = "1";
     $recordusuarios["usua_apellido"]    = $db->conn->qstr(limpiar_sql(trim($ciud->caracterEspecial($_POST["ciu_apellido"]))));
-    $recordusuarios["cargo_id"]         = "1";
+    $recordusuarios["cargo_id"]         = "NULL"; // FK a catálogo cargo; el puesto se asigna luego desde el catálogo
     $recordusuarios["usua_direccion"]   = $db->conn->qstr(limpiar_sql(trim($ciud->caracterEspecial($_POST["ciu_direccion"]))));
     $recordusuarios["usua_telefono"]    = $db->conn->qstr(limpiar_sql(trim($ciud->caracterEspecial($_POST["ciu_telefono"]))));
     $recordusuarios["usua_codi_actualiza"]      = $_SESSION['usua_codi'];

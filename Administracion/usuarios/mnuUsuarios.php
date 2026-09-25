@@ -85,7 +85,7 @@ function print_admin_menu_user(){
     $html .= html_writer::end_tag('div');
 
     $html .= html_writer::start_tag('div', array('class' => 'menu-item'));
-    $html .= html_writer::tag('a','3. Desactivar Subrogación de Puesto', array('href'=>'../subrogacion/buscar_usuario_nuevo_subr.php?accion=3', 'class' => 'menu-item', 'title' => 'Desactivar Subrogación de Puesto'));
+    $html .= html_writer::tag('a','3. Desactivar Subrogación de Puesto', array('href'=>'../subrogacion/buscar_usuario_nuevo_subr_des.php?accion=3', 'class' => 'menu-item', 'title' => 'Desactivar Subrogación de Puesto'));
     $html .= html_writer::end_tag('div');
 
     $html .= html_writer::start_tag('div', array('class' => 'menu-item'));

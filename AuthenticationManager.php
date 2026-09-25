@@ -89,11 +89,13 @@ class AuthenticationManager {
         
         // Usar prepared statement para evitar inyección SQL
         $sql = "
-            SELECT u.usua_codi, u.usua_login, u.usua_pasw, u.depe_codi, 
-                   u.usua_tipo, u.usua_nomb, u.usua_email, u.usua_cedula
-            FROM usuarios u
+            SELECT u.usua_codi, u.usua_login, u.usua_pasw, u.depe_codi,
+                   u.tipo_usuario, u.usua_nomb, u.usua_email, u.usua_cedula
+            FROM usuario u
             WHERE UPPER(u.usua_login) = ?
               AND u.usua_esta = 1
+              AND usuario_vigente(u.usua_codi)   -- fuera de su fecha inicio/fin no entra
+            ORDER BY u.tipo_usuario ASC, u.usua_codi ASC
             LIMIT 1
         ";
         
@@ -113,7 +115,7 @@ class AuthenticationManager {
                 'usua_codi' => (int)$rs->fields['USUA_CODI'],
                 'usua_login' => $rs->fields['USUA_LOGIN'],
                 'depe_codi' => (int)$rs->fields['DEPE_CODI'],
-                'tipo_usuario' => (int)$rs->fields['USUA_TIPO'],
+                'tipo_usuario' => (int)$rs->fields['TIPO_USUARIO'],
                 'usua_nomb' => $rs->fields['USUA_NOMB'],
                 'usua_email' => $rs->fields['USUA_EMAIL'],
                 'usua_cedula' => $rs->fields['USUA_CEDULA'],
@@ -231,7 +233,7 @@ class AuthenticationManager {
         }
         
         // Buscar usuario en BD
-        $sql = "SELECT * FROM usuarios WHERE UPPER(usua_login) = ? LIMIT 1";
+        $sql = "SELECT * FROM usuario WHERE UPPER(usua_login) = ? AND usua_esta = 1 ORDER BY tipo_usuario ASC LIMIT 1";
         $rs = $this->db->conn->Execute($sql, array($login));
         
         if (!$rs->EOF) {
@@ -240,7 +242,7 @@ class AuthenticationManager {
                 'usua_codi' => (int)$rs->fields['USUA_CODI'],
                 'usua_login' => $rs->fields['USUA_LOGIN'],
                 'depe_codi' => (int)$rs->fields['DEPE_CODI'],
-                'tipo_usuario' => (int)$rs->fields['USUA_TIPO'],
+                'tipo_usuario' => (int)$rs->fields['TIPO_USUARIO'],
                 'usua_nomb' => $rs->fields['USUA_NOMB'],
                 'usua_email' => $rs->fields['USUA_EMAIL'],
                 'usua_cedula' => $rs->fields['USUA_CEDULA'],
@@ -312,7 +314,7 @@ class AuthenticationManager {
      * @return bool True si requiere cambio
      */
     public function requiresPasswordChange($usuaCodi) {
-        $sql = "SELECT usua_nuevo FROM usuarios WHERE usua_codi = ? LIMIT 1";
+        $sql = "SELECT usua_nuevo FROM usuario WHERE usua_codi = ? LIMIT 1";
         $rs = $this->db->conn->Execute($sql, array($usuaCodi));
         
         if ($rs && !$rs->EOF) {

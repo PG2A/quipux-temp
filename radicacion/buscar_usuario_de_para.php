@@ -50,6 +50,10 @@ if ($documento_us1!='' and $lista_destino!=''){
     $usuarios_eliminados = substr($usuarios_eliminados,1);
 }
 
+// Solicitudes de ciudadanos (RQT-7): sólo si la migración ya creó la tabla.
+include_once(dirname(__DIR__).'/include/ciudadanos/SolicitudCiudadano.php');
+$solicitudes_ciu = SolicitudCiudadano::disponible($db) ? new SolicitudCiudadano($db) : null;
+
 ?>
 
 <table class=borde_tab width="100%" cellpadding="0" cellspacing="4">
@@ -108,6 +112,15 @@ if ($documento_us1!='' and $lista_destino!=''){
                  if ($usr["usua_estado"]==0){
                   $color="#F7BE81";
                   $inactivo="<b>(Inactivo)</b>";
+                 }elseif ($usr["usua_estado"]==2){ // ciudadano pendiente de aprobación (RQT-7)
+                  $color="#FCE9B6";
+                  $inactivo="<b>(Pendiente de aprobaci&oacute;n)</b>";
+                  $usr["nombre"] = strip_tags($usr["nombre"]);
+                  // Quien lo solicitó puede cancelar la solicitud desde aquí; además de
+                  // quitarlo del documento, desactiva al ciudadano pendiente.
+                  $boton = "<input class='botones_azul' title='Quitar del documento' type='button' value='Borrar' onClick=\"borrarCCA(".$usr["usua_codi"].",'$tip');\">";
+                  if ($solicitudes_ciu !== null && $solicitudes_ciu->esSolicitante($usr["usua_codi"], $_SESSION["usua_codi"]))
+                      $boton .= " <input class='botones_azul' title='Cancelar la solicitud de alta del ciudadano' type='button' value='Cancelar solicitud' onClick=\"cancelar_solicitud_ciudadano(".$usr["usua_codi"].",'$tip');\">";
                  }else {
                     
                           $color="";

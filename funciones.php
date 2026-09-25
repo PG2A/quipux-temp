@@ -250,6 +250,9 @@ function p_register_globals($list = null) {
 // $nombre_dest es el nombre del destinatario
 function enviarMail($mensaje, $asunto, $destinatario_ori, $nombre_dest="", $ruta_raiz=".") {
     include($ruta_raiz.'/config.php');
+    // Puente del entorno local de desarrollo. /local/ está en .gitignore y no se
+    // despliega, así que en producción esto no existe y el envío sigue por mail().
+    if (is_file(__DIR__.'/local/mail/Mailer.php')) include_once(__DIR__.'/local/mail/Mailer.php');
     $tmp = explode(",", $destinatario_ori);
     foreach ($tmp as $destinatario) {
         $destinatario = trim($destinatario);
@@ -266,13 +269,17 @@ function enviarMail($mensaje, $asunto, $destinatario_ori, $nombre_dest="", $ruta
             $mail_body = str_replace("**SISTEMA**", "<a href='$nombre_servidor' target='_blank'>$nombre_servidor</a>", $mensaje);
             $mail_body = str_replace("**DESPEDIDA**", $despedida, $mail_body);
 
-            $header = 'MIME-Version: 1.0' . "\r\n";
-            $header .= 'Content-type: text/html; charset=UTF-8' . "\r\n";
-            //$header .= "To: $nombre_dest <" . $destinatario . ">" . "\r\n";
-            $header .= "From: Quipux <$cuenta_mail_envio>" . "\r\n";
+            if (function_exists('quipux_enviar_correo')) {
+                quipux_enviar_correo($email, $subject, $mail_body, $nombre_dest, $cuenta_mail_envio);
+            } else {
+                $header = 'MIME-Version: 1.0' . "\r\n";
+                $header .= 'Content-type: text/html; charset=UTF-8' . "\r\n";
+                //$header .= "To: $nombre_dest <" . $destinatario . ">" . "\r\n";
+                $header .= "From: Quipux <$cuenta_mail_envio>" . "\r\n";
 
-            ini_set('sendmail_from', "$cuenta_mail_envio"); //Suggested by "Some Guy"
-            mail($email, $subject, $mail_body, $header); //mail command :)
+                ini_set('sendmail_from', "$cuenta_mail_envio"); //Suggested by "Some Guy"
+                mail($email, $subject, $mail_body, $header); //mail command :)
+            }
         }
     }
 //echo "<hr>Para: $destinatario_ori<br><br>Asunto: $asunto<br><br>$mail_body<hr>";
@@ -524,6 +531,10 @@ function get_mime_tipe($archivo) {
       case "png": return "image/png"; break;
       case "jpeg":
       case "jpg": return "image/jpg"; break;
+      case "bmp": return "image/bmp"; break;
+      case "webp": return "image/webp"; break;
+      case "tif":
+      case "tiff": return "image/tiff"; break;
       case "mp3": return "audio/mpeg"; break;
       case "wav": return "audio/x-wav"; break;
       case "mpeg":

@@ -118,6 +118,12 @@ $nombre_servidor_reportes = $nombre_servidor; // en caso que los reportes se lo 
 $nombre_servidor_respaldos = $nombre_servidor; // en caso que los respaldos se requiera sacar en un servidor diferente
 
 $CFG->nombre_servidor_reportes = $nombre_servidor_reportes;
+// Copias en $CFG (único global que declara este archivo): cuando config.php se
+// carga desde ConnectionHandler::_loadConfig() las variables sueltas quedan en el
+// ámbito de ese método y los scripts que arman correos las reciben vacías.
+$CFG->nombre_servidor = $nombre_servidor;
+$CFG->cuenta_mail_soporte = $cuenta_mail_soporte;
+$CFG->cuenta_mail_envio = $cuenta_mail_envio;
 
 $servidor_firma = "http://firmadigital.ucuenca.edu.ec/firma";
 // $servidor_firma = "http://127.0.0.1:8085/firma";

@@ -174,7 +174,7 @@ $ok=obtenerCodigos($_SESSION['usua_codi'],$depeCodiPadre,$db,1);
 $depe_codi_admin = obtenerAreasAdmin($_SESSION["usua_codi"],$_SESSION["inst_codi"],$_SESSION["usua_admin_sistema"],$db);
 $gd=1;
 
-if ($depe_codi_admin!=0){//si administra dependencias
+if (!empty($depe_codi_admin)){//si administra dependencias
     if ($ok==1)//si administra la dependencia padre
         $gd=1;//significa que puede guardar cambios en esta pantalla de instituciones
     else

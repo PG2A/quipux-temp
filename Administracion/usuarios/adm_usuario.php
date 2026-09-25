@@ -83,6 +83,9 @@ $usr_direccion = isset($usr_direccion) ? $usr_direccion : "";
 $usr_telefono = isset($usr_telefono) ? $usr_telefono : "";
 $usr_sumilla = isset($usr_sumilla) ? $usr_sumilla : "";
 $usr_celular = isset($usr_celular) ? $usr_celular : "";
+// Vigencia de la cuenta (fecha inicio / fin). En un alta nueva arranca hoy y sin fin.
+$usr_vig_desde = isset($usr_vig_desde) ? $usr_vig_desde : ((0 + ($_REQUEST["accion"] ?? 0)) == 1 ? date("Y-m-d") : "");
+$usr_vig_hasta = isset($usr_vig_hasta) ? $usr_vig_hasta : "";
 $usr_obs    = isset($usr_obs) ? $usr_obs : "";
 $usr_inst_nombre = isset($usr_inst_nombre) ? $usr_inst_nombre : "";
 $codi_ciudad = isset($codi_ciudad) ? $codi_ciudad : 0;
@@ -154,6 +157,8 @@ if (!isset($recargar)) {
         $usr_telefono   = $rs->fields["USUA_TELEFONO"];
         //celular
         $usr_celular   = $rs->fields["USUA_CELULAR"];
+        $usr_vig_desde = substr((string)($rs->fields["USUA_VIGENCIA_DESDE"] ?? ""), 0, 10);
+        $usr_vig_hasta = substr((string)($rs->fields["USUA_VIGENCIA_HASTA"] ?? ""), 0, 10);
 
         //Datos del ultimo usuario que actualizó el registro
         $usr_codi_actualiza     = $rs->fields["USUA_CODI_ACTUALIZA"];
@@ -255,6 +260,7 @@ require_once("../../js/ajax.js");
 <script type="text/javascript" src="../ciudadanos/adm_ciudadanos.js?v=<?=time()?>"></script>
 <script type="text/javascript" src="../../js/formchek.js"></script>
 <script type="text/javascript" src="../../js/validar_datos_usuarios.js"></script>
+<script type="text/javascript" src="../../js/select_buscador.js?v=<?=time()?>"></script>
 <script type="text/javascript">
     function ocultar_combo_usuario_des()
     {
@@ -309,8 +315,8 @@ if (substr($usr_login,0,6)!="UADM") { ?>
     }
 <?php  } ?>
 
-        e(trim(document.forms[0].usr_cargo.value) == '', "Ingrese el puesto del usuario.");
-        e(trim(document.forms[0].usr_cargo_cabecera.value) == '', "Ingrese el puesto del usuario a mostrar en la cabecera del documento.");
+        e(!document.getElementById('cargo_id') || trim(document.getElementById('cargo_id').value) == '' || document.getElementById('cargo_id').value == '0',
+            "Seleccione el puesto del usuario del catálogo del área. Si el área no tiene el puesto, regístrelo primero en Áreas › Puestos.");
         e(trim(document.forms[0].usr_sumilla.value) == '' && '<?php  if ($_SESSION["inst_codi"]>1) echo "1";?>'=='1',
             "Ingrese la sumilla del usuario a mostrar en el pie de página del documento.");
         e(trim(document.forms[0].usr_email.value) == '', "Ingrese el correo electrónico.");
@@ -353,6 +359,16 @@ if (substr($usr_login,0,6)!="UADM") { ?>
             }
         }
         if (msg == '' && !validar_datos_registro_civil('usr_nombre','usr_apellido')) return false; // Lanza automaticamente el confirm
+
+        // No permitir dos cuentas de la misma cédula con el mismo puesto.
+        if (msg == '' && !avisar_puesto_duplicado()) return false;
+
+        // Vigencia: la fecha fin no puede ser anterior a la fecha inicio.
+        var vd = document.getElementById('usr_vig_desde'), vh = document.getElementById('usr_vig_hasta');
+        if (msg == '' && vd && vh && vd.value != '' && vh.value != '' && vh.value < vd.value) {
+            alert('La fecha fin no puede ser anterior a la fecha inicio.');
+            return false;
+        }
 
         if (msg == '') {
             if (window.bloquearPantalla) bloquearPantalla('Guardando usuario...');
@@ -401,7 +417,55 @@ function cargarCiudad(){
     return;
 }
 
+// Combo de puestos del área (catálogo 'cargo'). Al cambiar de área se recargan
+// sus puestos; al elegir uno se rellenan el puesto, la cabecera y el perfil.
+function cargarPuestos(){
+    var area = document.getElementById('usr_depe').value;
+    var cid  = document.getElementById('cargo_id') ? document.getElementById('cargo_id').value : 0;
+    nuevoAjax('div_cmb_puesto', 'GET', 'puestos_combo_ajax.php', 'area='+area+'&cargo_id='+cid);
+    return;
+}
+function aplicarPuesto(sel){
+    var o = sel.options[sel.selectedIndex];
+    var cid = o.value;
+    var perfilSel = document.getElementById('usr_perfil');
+    if (document.getElementById('cargo_id'))
+        document.getElementById('cargo_id').value = (cid && cid != '0') ? cid : '';
+    if (cid && cid != '0') {
+        document.getElementById('usr_cargo').value = o.getAttribute('data-nombre') || '';
+        var cab = o.getAttribute('data-cabecera');
+        document.getElementById('usr_cargo_cabecera').value = (cab && cab != '') ? cab : (o.getAttribute('data-nombre') || '');
+        var tipo = o.getAttribute('data-tipo');
+        // El perfil (Jefe/Normal) lo define el puesto: se fija y se bloquea.
+        if (perfilSel && tipo !== null && tipo !== '') {
+            perfilSel.value = tipo;
+            perfilSel.disabled = true;
+        }
+        avisar_puesto_duplicado();
+    } else {
+        // Sin puesto elegido, el perfil vuelve a estar disponible.
+        if (perfilSel) perfilSel.disabled = false;
+    }
+    return;
+}
+
 nuevoAjax('usr_ciu', 'GET', 'ciudad_ajax.php', 'area=<?php echo (int)$usr_depe; ?>&codigo=<?php echo (int)$codi_ciudad; ?>');
+nuevoAjax('div_cmb_puesto', 'GET', 'puestos_combo_ajax.php', 'area=<?php echo (int)$usr_depe; ?>&cargo_id=<?php echo (int)($cargo_id ?? 0); ?>');
+
+// Buscadores para los combos de Dependencia y Puesto. El de dependencia es fijo;
+// el de puesto se re-mejora solo cada vez que el AJAX recarga su combo.
+if (typeof mejorarSelect === 'function') {
+    mejorarSelect(document.getElementById('usr_depe'));
+    observarSelect('div_cmb_puesto', 'cmb_puesto');
+}
+
+// Al cargar (edición), si el usuario ya tiene un puesto del catálogo, el perfil
+// se muestra bloqueado (lo gobierna el puesto).
+(function () {
+    var cid = document.getElementById('cargo_id');
+    var perfilSel = document.getElementById('usr_perfil');
+    if (perfilSel && cid && cid.value && cid.value != '0') perfilSel.disabled = true;
+})();
 
     // Validar el tipo de archivo que se esta ingresando y copiar su nombre
 
@@ -473,11 +537,61 @@ nuevoAjax('usr_ciu', 'GET', 'ciudad_ajax.php', 'area=<?php echo (int)$usr_depe; 
             var_tipo_identificacion = 0;
             document.getElementById('usr_cedula').maxLength = 10;
         }
-        document.getElementById('usr_tipo_id').value = var_tipo_identificacion;      
+        document.getElementById('usr_tipo_id').value = var_tipo_identificacion;
         if (trim(cedula)!='') {
             //nuevoAjax('div_datos_registro_civil', 'POST', 'validar_datos_registro_civil.php', 'cedula='+cedula+'&tipo_identificacion='+var_tipo_identificacion);
             nuevoAjax('div_datos_usuario_multiple', 'POST', 'validar_datos_usuario_multiple.php', 'usr_codigo=<?php echo (int)$usr_codigo; ?>&cedula='+cedula);
+            autocompletar_por_cedula(trim(cedula));
         }
+    }
+
+    // Puestos (cargo_id) que la cédula ya ocupa (para avisar de duplicado).
+    var cargos_usados_cedula = [];
+    // Puesto activo de la persona en la estructura orgánica (texto) o ''. El
+    // bloqueo se valida al grabar, sólo si el área elegida es de la estructura.
+    var puesto_estructura_cedula = '';
+
+    // Si la cédula ya corresponde a un usuario interno, trae y rellena sus datos
+    // personales (misma persona, otra cuenta). No toca el área ni el puesto.
+    function autocompletar_por_cedula(cedula) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', 'datos_usuario_por_cedula.php?usr_codigo=<?php echo (int)$usr_codigo; ?>&cedula=' + encodeURIComponent(cedula), true);
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState != 4 || xhr.status != 200) return;
+            var d;
+            try { d = JSON.parse(xhr.responseText); } catch (e) { return; }
+            if (!d || !d.existe) { cargos_usados_cedula = []; puesto_estructura_cedula = ''; return; }
+            cargos_usados_cedula = d.cargos_usados || [];
+            puesto_estructura_cedula = d.puesto_estructura || '';
+            // Rellena sólo los campos vacíos, para no pisar lo ya escrito.
+            fijar_si_vacio('usr_nombre',   d.nombre);
+            fijar_si_vacio('usr_apellido', d.apellido);
+            fijar_si_vacio('usr_titulo',   d.titulo);
+            fijar_si_vacio('usr_abr_titulo', d.abr_titulo);
+            fijar_si_vacio('usr_email',    d.email);
+            fijar_si_vacio('usr_direccion', d.direccion);
+            fijar_si_vacio('usr_telefono', d.telefono);
+            fijar_si_vacio('usr_sumilla',  d.sumilla);
+            var ciu = document.getElementById('codi_ciudad');
+            if (ciu && (ciu.value == '0' || ciu.value == '') && d.ciu_codi) ciu.value = d.ciu_codi;
+            avisar_puesto_duplicado();
+        };
+        xhr.send(null);
+    }
+    function fijar_si_vacio(id, val) {
+        var el = document.getElementById(id);
+        if (el && (el.value == null || trim(el.value) == '') && val != null && val != '') el.value = val;
+    }
+    // Avisa si la cédula ya ocupa el puesto elegido (mismo cargo = duplicado).
+    function avisar_puesto_duplicado() {
+        var cg = document.getElementById('cargo_id');
+        if (!cg) return true;
+        var cargo = 0 + cg.value;
+        if (cargo > 0 && cargos_usados_cedula.indexOf(cargo) >= 0) {
+            alert('Esta cédula ya tiene una cuenta con este puesto. Elija otro puesto: no puede haber dos cuentas de la misma persona en el mismo puesto.');
+            return false;
+        }
+        return true;
     }
     function verificarResponsable(area,tipo){
       
@@ -712,42 +826,90 @@ function desactivar(codigo_subrogante,codigo_subrogado){
             <font size='2'>Usuario $usuarioSubr de ($nombreSubdo)</font></td></tr>";
             ?>
             
+        <tr><td colspan="4" class="titulos4" style="text-align:left;padding:4px 8px">Identificaci&oacute;n</td></tr>
             <tr>
-                <td class="titulos2" width="8%">* C&eacute;dula </td>
-                <td class="listado2" width="10%">
-                    <input type="text" name="usr_cedula" id="usr_cedula" value='<?php echo isset($usr_cedula) ? $usr_cedula : ""; ?>' size="<?=$size_txt?>" onchange="validar_cambio_cedula(); mostrar_div('div_datos_usuario_multiple'); " maxlength="10" <?php echo $read; ?> >
+                <td class="titulos2" width="15%">* C&eacute;dula </td>
+                <td class="listado2" width="35%">
+                    <input type="text" name="usr_cedula" id="usr_cedula" value='<?php echo isset($usr_cedula) ? $usr_cedula : ""; ?>' size="<?=$size_txt?>" onchange="validar_cambio_cedula();" maxlength="10" <?php echo $read; ?> >
                     <br>Es Pasaporte<input type="checkbox" name="usr_tipo_ident" id="usr_tipo_ident" value="0" <?php echo $checked_tipo_identificacion?> onchange="validar_cambio_cedula()" <?php echo $var_habilitado?>>                
                     <input type="hidden" name="usr_tipo_id" id="usr_tipo_id" value='<?=$usr_tipo_ident?>' <?php echo $checked_tipo_identificacion?>>
                 </td>
-                <td class="titulos2" width="10%"> Usuario </td>
-                <td class="listado2" width="10%"><?php //if($usr_estado=='checked') echo substr($usr_login,1); else echo "Usuario Inactivo"; ?>
+                <td class="titulos2" width="15%"> Usuario </td>
+                <td class="listado2" width="35%"><?php //if($usr_estado=='checked') echo substr($usr_login,1); else echo "Usuario Inactivo"; ?>
                 <?=($usr_estado=='checked') ? substr($usr_login,1):"Usuario Inactivo"; ?>
                 </td>
             </tr>
+        <tr><td colspan="4" class="titulos4" style="text-align:left;padding:4px 8px">Datos personales</td></tr>
             <tr>
-                <td class="titulos2" width="10%">* Nombre &nbsp;&nbsp;&nbsp;
+                <td class="titulos2" width="15%">* Nombre &nbsp;&nbsp;&nbsp;
                     <img src="../../iconos/copy.gif" alt="copiar" title="Copiar datos del Registro Civil" onclick="copiar_datos_registro_civil('nombre', 'usr_nombre')">
                 </td>
-                <td class="listado2" width="10%">
+                <td class="listado2" width="35%">
                     <input type="text" name="usr_nombre" id="usr_nombre" onblur="this.value=ulCase(this.value); cambiar_sumilla();" value='<?php echo $usr_nombre; ?>' size="<?=$size_txt?>"  maxlength="100" <?php echo $read; ?>>
                 </td>
-                <td class="titulos2" width="20%">* Apellido &nbsp;&nbsp;&nbsp;
+                <td class="titulos2" width="15%">* Apellido &nbsp;&nbsp;&nbsp;
                     <img src="../../iconos/copy.gif" alt="copiar" title="Copiar datos del Registro Civil" onclick="copiar_datos_registro_civil('nombre', 'usr_apellido')">
                 </td>
-                <td class="listado2" width="10%">
+                <td class="listado2" width="35%">
                     <input type="text" name="usr_apellido" id="usr_apellido" onblur="this.value=ulCase(this.value); cambiar_sumilla();" value='<?php echo $usr_apellido; ?>' size="<?=$size_txt?>"  maxlength="100" <?php echo $read; ?>>
                 </td>
             
             </tr>
             <tr>
-                <td class="titulos2" width="10%"> <?php echo ($_SESSION["inst_codi"]==1) ? $descEmpresa : "* $descDependencia";?></td>
-                <td class="listado2" width="10%">
+                <td class="titulos2" width="15%"> Abr. y T&iacute;tulo </td>
+                <td class="listado2" width="35%">
+                <?php
+                $sql_tit = "select tit_nombre || ' - ' || tit_abreviatura, tit_codi from titulo order by split_part(tit_nombre, ' ', 1) asc, split_part(tit_nombre, ' ', 2) asc, tit_nombre asc";
+                //$sql_tit = "select tit_nombre, tit_codi from titulo order by split_part(tit_nombre, ' ', 1) asc, split_part(tit_nombre, ' ', 2) asc, tit_nombre asc";
+
+                $prevModeTit = $connHandler->conn->fetchMode;
+                $connHandler->conn->SetFetchMode(ADODB_FETCH_NUM);
+                $rs_tit = $connHandler->conn->Execute($sql_tit);
+                $connHandler->conn->SetFetchMode($prevModeTit);
+                    echo $rs_tit->GetMenu2("cmb_tit", (int)($cmb_tit ?? 0), "0:&lt;&lt; seleccione &gt;&gt;", false,0,"id='cmb_tit' class='select' $read3 onchange='cargarDatosTit()'");
+                ?>
+                    <br>               
+                    <input type="text" name="usr_abr_titulo" id="usr_abr_titulo" value='<?=$usr_abr_titulo?>' size="4" maxlength="30" <?php if($_SESSION["usua_codi"]!=0) echo $read3;?>>
+
+                    <input type="text" name="usr_titulo" id="usr_titulo" value='<?php echo $usr_titulo; ?>' size="<?=$size_txt?>"  maxlength="100" <?php echo $read3;?>>
+                </td>
+                <td class="titulos2" width="15%"> * Correo electr&oacute;nico </td>
+                <td class="listado2" colspan="<?=$colspan?>">
+                    <input type="text" name="usr_email" id="usr_email" value='<?=$usr_email?>' size="<?=$size_txt?>"  maxlength="50" <?php echo $read; ?> >
+                    <!-- onChange="nuevoAjax('div_validar_email', 'POST', 'validar_email.php', 'txt_email='+this.value);" -->
+                </td>
+            </tr>
+        <tr><td colspan="4" class="titulos4" style="text-align:left;padding:4px 8px">Contacto</td></tr>
+        <tr>
+            <td class="titulos2" width="15%"> Direcci&oacute;n &nbsp;&nbsp;&nbsp;
+                <img src="../../iconos/copy.gif" alt="copiar" title="Copiar datos del Registro Civil" onclick="copiar_datos_registro_civil('direccion', 'usr_direccion')">
+            </td>
+            <td class="listado2" width="35%">
+                <input type="text" name="usr_direccion" id="usr_direccion" onblur="this.value=ulCase(this.value)"  value='<?=$usr_direccion?>' size="<?=$size_txt?>"  maxlength="50" <?php echo $read; ?>>
+            </td>
+            <td class="titulos2" width="15%"> Tel&eacute;fono </td>
+            <td class="listado2" width="35%">
+                <input type="text" name="usr_telefono" id="usr_telefono" value='<?=$usr_telefono?>' size="<?=$size_txt?>"  maxlength="50" <?php echo $read; ?>>
+            </td>
+        </tr>
+        <tr>
+             <td class="titulos2" width="15%">Celular</td>
+             <td colspan="3" class="listado2">
+                <input type="text" name="usr_celular" id="usr_celular" value='<?=$usr_celular?>' size="10" maxlength="10" <?php echo $read; ?>/>
+             </td>
+        </tr>
+        <tr><td colspan="4" class="titulos4" style="text-align:left;padding:4px 8px">&Aacute;rea y puesto</td></tr>
+            <tr>
+                <td class="titulos2" width="15%"> <?php echo ($_SESSION["inst_codi"]==1) ? $descEmpresa : "* $descDependencia";?></td>
+                <td class="listado2" width="35%">
                <?php
                 $depe_codi_admin = obtenerAreasAdmin($_SESSION["usua_codi"],$_SESSION["inst_codi"],$_SESSION["usua_admin_sistema"],$connHandler);
-                $sql = "select depe_nomb, depe_codi from dependencia where depe_estado=1 and inst_codi=".$_SESSION["inst_codi"];
+                // Se muestra la ruta jerárquica (depe_ruta) para distinguir una sub área
+                // (p. ej. "FCM - VICEDECANATO") de otra con el mismo nombre corto.
+                $sql = "select depe_ruta(depe_codi) as depe_nomb, depe_codi from dependencia where depe_estado=1 and inst_codi=".$_SESSION["inst_codi"];
                  if (!empty($depe_codi_admin))
-                $sql.=" and depe_codi in ($depe_codi_admin)";            
-                $sql.=" order by depe_nomb asc";
+                $sql.=" and depe_codi in ($depe_codi_admin)";
+                $sql.=" order by depe_ruta(depe_codi) asc";
 
                 $prevMode = $connHandler->conn->fetchMode;
                 $connHandler->conn->SetFetchMode(ADODB_FETCH_NUM);
@@ -755,7 +917,7 @@ function desactivar(codigo_subrogante,codigo_subrogado){
                 $connHandler->conn->SetFetchMode($prevMode);
                 $mostrar_inst = ($_SESSION["inst_codi"]==1) ? "style='display:none'" : "";
                 if ($rs && !$rs->EOF) {
-                    echo $rs->GetMenu2("usr_depe", (int)($usr_depe ?? 0), "0:&lt;&lt; seleccione &gt;&gt;", false,0,"id='usr_depe' style='width:350px;' class='select' $read2 onchange='cargarCiudad(); verificarResponsable(this.value,1);' $mostrar_inst");
+                    echo $rs->GetMenu2("usr_depe", (int)($usr_depe ?? 0), "0:&lt;&lt; seleccione &gt;&gt;", false,0,"id='usr_depe' style='width:350px;' class='select' $read2 onchange='cargarCiudad(); cargarPuestos(); verificarResponsable(this.value,1);' $mostrar_inst");
                 } else {
                      echo "<input type='hidden' name='usr_depe' id='usr_depe' value='0'>";
                      echo "<span style='color:red'>No user areas found. Please create an area first.</span>";
@@ -764,8 +926,8 @@ function desactivar(codigo_subrogante,codigo_subrogado){
                 ?>
                     <input type="text" name="usr_inst_nombre" id="usr_inst_nombre" value='<?php echo $usr_inst_nombre; ?>' size="<?=$size_txt?>"  maxlength="200" <?php echo "$read $mostrar_inst"; ?>>
                 </td>
-                <td class="titulos2"> * Ciudad </td>
-                <td class="listado2">
+                <td class="titulos2" width="15%"> * Ciudad </td>
+                <td class="listado2" width="35%">
                     <div id='usr_ciu'>
                         <?php
                             $sqlCmbCiu = "select id, nombre from ciudad order by 2";
@@ -794,74 +956,48 @@ function desactivar(codigo_subrogante,codigo_subrogado){
                 </td>
             </tr>
             <tr>
-                <td class="titulos2"> Abr. y T&iacute;tulo </td>
-                <td class="listado2">
-                <?php
-                $sql_tit = "select tit_nombre || ' - ' || tit_abreviatura, tit_codi from titulo order by split_part(tit_nombre, ' ', 1) asc, split_part(tit_nombre, ' ', 2) asc, tit_nombre asc";
-                //$sql_tit = "select tit_nombre, tit_codi from titulo order by split_part(tit_nombre, ' ', 1) asc, split_part(tit_nombre, ' ', 2) asc, tit_nombre asc";
-
-                $prevModeTit = $connHandler->conn->fetchMode;
-                $connHandler->conn->SetFetchMode(ADODB_FETCH_NUM);
-                $rs_tit = $connHandler->conn->Execute($sql_tit);
-                $connHandler->conn->SetFetchMode($prevModeTit);
-                    echo $rs_tit->GetMenu2("cmb_tit", (int)($cmb_tit ?? 0), "0:&lt;&lt; seleccione &gt;&gt;", false,0,"id='cmb_tit' class='select' $read3 onchange='cargarDatosTit()'");
-                ?>
-                    <br>               
-                    <input type="text" name="usr_abr_titulo" id="usr_abr_titulo" value='<?=$usr_abr_titulo?>' size="4" maxlength="30" <?php if($_SESSION["usua_codi"]!=0) echo $read3;?>>
-
-                    <input type="text" name="usr_titulo" id="usr_titulo" value='<?php echo $usr_titulo; ?>' size="<?=$size_txt?>"  maxlength="100" <?php echo $read3;?>>
-                </td>
-                <td class="titulos2"> * Correo electr&oacute;nico </td>
-                <td class="listado2" colspan="<?=$colspan?>">
-                    <input type="text" name="usr_email" id="usr_email" value='<?=$usr_email?>' size="<?=$size_txt?>"  maxlength="50" <?php echo $read; ?> >
-                    <!-- onChange="nuevoAjax('div_validar_email', 'POST', 'validar_email.php', 'txt_email='+this.value);" -->
-                </td>
-            </tr>
-            <tr>
-            <td class="titulos2"> * Puesto </td>
-            <td class="listado2">
-                <input type="text" name="usr_cargo" id="usr_cargo" onblur="this.value=ulCase(this.value);" onchange="copiar_cargo_cabecera();" value='<?=$usr_cargo?>' size="<?=$size_txt?>"  maxlength="200" title="Nombre del puesto que se visualizará  en el pie de firma del documento" <?php echo $read; ?>>
+            <td class="titulos2" width="15%"> * Puesto </td>
+            <td class="listado2" width="35%">
+                <div id="div_cmb_puesto" style="margin-bottom:4px;"></div>
+                <!-- El puesto sólo se elige del combo (catálogo del área); estos campos
+                     son de sólo lectura y los rellena aplicarPuesto(). -->
+                <input type="text" name="usr_cargo" id="usr_cargo" value='<?=$usr_cargo?>' size="<?=$size_txt?>"  maxlength="200" title="Nombre del puesto que se visualizará en el pie de firma del documento" readonly class="tex_area_ro">
             </td>
-            <td class="titulos2"> * Puesto Cabecera </td>
-             <td class="listado2">
-                 <input type="text" name="usr_cargo_cabecera" id="usr_cargo_cabecera" onblur="this.value=ulCase(this.value);" value='<?=$usr_cargo_cabecera?>' size="<?=$size_txt?>"  maxlength="200"  title="Nombre del puesto que se visualizarà en la cabecera del documento" <?php echo $read; ?>>
-            </td>
-        </tr>
-        <tr>
-            <td class="titulos2"> Direcci&oacute;n &nbsp;&nbsp;&nbsp;
-                <img src="../../iconos/copy.gif" alt="copiar" title="Copiar datos del Registro Civil" onclick="copiar_datos_registro_civil('direccion', 'usr_direccion')">
-            </td>
-            <td class="listado2">
-                <input type="text" name="usr_direccion" id="usr_direccion" onblur="this.value=ulCase(this.value)"  value='<?=$usr_direccion?>' size="<?=$size_txt?>"  maxlength="50" <?php echo $read; ?>>
-            </td>
-            <td class="titulos2"> Tel&eacute;fono </td>
-            <td class="listado2">
-                <input type="text" name="usr_telefono" id="usr_telefono" value='<?=$usr_telefono?>' size="<?=$size_txt?>"  maxlength="50" <?php echo $read; ?>>
+            <td class="titulos2" width="15%"> * Puesto Cabecera </td>
+             <td class="listado2" width="35%">
+                 <input type="text" name="usr_cargo_cabecera" id="usr_cargo_cabecera" value='<?=$usr_cargo_cabecera?>' size="<?=$size_txt?>"  maxlength="200"  title="Nombre del puesto que se visualizará en la cabecera del documento" readonly class="tex_area_ro">
             </td>
         </tr>
          <tr <?php if ($_SESSION["inst_codi"]==1) echo "style='display:none'" ?>>
-            <td class="titulos2" width="20%">* Perfil</td>
-            <td class="listado2" width="30%">
+            <td class="titulos2" width="15%">* Perfil</td>
+            <td class="listado2" width="35%">
             <select id="usr_perfil" name="usr_perfil" <?php if ($mensajeSubro=='') echo "class='select'";?> <?=$read4?>>
                 <option value='0' <?php if ($usr_perfil==0) echo "selected"?>> Normal </option>
                 <option value='1' <?php if ($usr_perfil==1) echo "selected"?>> Jefe </option>
 <!--                <option value='2' <?php if ($usr_perfil==2) echo "selected"?>> Asistente </option>-->
             </select>
             </td>
-            <td class="titulos2"> * Iniciales Sumilla </td>
-            <td class="listado2">
+            <td class="titulos2" width="15%"> * Iniciales Sumilla </td>
+            <td class="listado2" width="35%">
                 <input type="text" name="usr_sumilla" id="usr_sumilla" value='<?=$usr_sumilla?>' size="5" maxlength="5" <?php echo $read; ?>>
                 <div id="div_responsable_area" style="width: 100%;"></div>
 <!--                <input type="checkbox" name="usr_area_responsable" id="usr_area_responsable" value="0" onclick="Obtener_val(this)" title="Iniciales del usuario que se visualizará el pie de página (mayùculas) de un documento" <?php echo $usr_responsable_area ."  " .$read; ?>/>Responsable de Área-->
                
             </td>      
         </tr>
+        <tr><td colspan="4" class="titulos4" style="text-align:left;padding:4px 8px">Vigencia de la cuenta</td></tr>
         <tr>
-             <td class="titulos2" width="20%">Celular</td>
-             <td colspan="3" class="listado2" width="30%">
-                <input type="text" name="usr_celular" id="usr_celular" value='<?=$usr_celular?>' size="10" maxlength="10" <?php echo $read; ?>/>
-             </td>
+            <td class="titulos2" width="15%">Fecha inicio</td>
+            <td class="listado2" width="35%">
+                <input type="date" name="usr_vig_desde" id="usr_vig_desde" value='<?=htmlspecialchars((string)$usr_vig_desde, ENT_QUOTES)?>' <?php echo $read; ?>>
+            </td>
+            <td class="titulos2" width="15%">Fecha fin</td>
+            <td class="listado2" width="35%">
+                <input type="date" name="usr_vig_hasta" id="usr_vig_hasta" value='<?=htmlspecialchars((string)$usr_vig_hasta, ENT_QUOTES)?>' <?php echo $read; ?>>
+                <br><font size="1">Vac&iacute;o = sin fecha de fin. Fuera de estas fechas la cuenta no puede usarse, y al pasar la fecha fin se desactiva autom&aacute;ticamente.</font>
+            </td>
         </tr>
+        <tr><td colspan="4" class="titulos4" style="text-align:left;padding:4px 8px">Otros datos</td></tr>
         <?php if($_SESSION['usua_codi'] == '0' and $_SESSION["inst_codi"]>1) { ?>
         <tr>
             <td class="titulos2"> Firma digitalizada </td>

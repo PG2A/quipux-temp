@@ -57,7 +57,7 @@ if (!$orderTipo) $orderTipo="asc";
 
 $sql = '';
 include(dirname(__DIR__, 2)."/include/query/administracion/queryCuerpoUsuario.php");
-      
+
 //    echo str_replace("<", "&lt;", $isql)."<br>";
 $linkPagina = $_SERVER['PHP_SELF']; 
 $encabezado = "";

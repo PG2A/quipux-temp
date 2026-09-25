@@ -28,11 +28,22 @@
 
 session_start();
 include_once(__DIR__.'/rec_session.php');
+include_once(__DIR__.'/include/subrogacion/Subrogacion.php');
 
 $recordSet = array();
 
-$sqlUsua = "select * from usuario where usua_codi=".(0+$_POST["cargo_usuario"]) .
-           " and usua_codi>0 and usua_login not like 'UADM%' and usua_esta=1";
+// La persona física detrás de la sesión. usua_codi puede ser el cargo que está
+// subrogando en este momento, así que la autorización se evalúa siempre contra
+// la persona real, nunca contra la identidad que tenga asumida.
+$usua_codi_real = (int)($_SESSION["usua_codi_real"] ?? $_SESSION["usua_codi"]);
+$destino        = 0 + ($_POST["cargo_usuario"] ?? 0);
+
+$subrogacion = new Subrogacion($db);
+// ¿El destino es un cargo que esta persona subroga con vigencia activa?
+$contextoSubrogado = $subrogacion->contextoAutorizado($usua_codi_real, $destino);
+
+$sqlUsua = "select * from usuario where usua_codi=" . $destino .
+           " and usua_codi>0 and usua_login not like 'UADM%' and usua_esta=1 and usuario_vigente(usua_codi)";
 $rs = $db->conn->query($sqlUsua);
 
 if (!$rs or $rs->EOF) {
@@ -42,27 +53,50 @@ if (!$rs or $rs->EOF) {
     if (!$rs or $rs->EOF) die (include "./paginaError.php");
 }
 /**
-* Verifica si el usuario es tiene el mismo numero de cedula y esta activo caso contrario presenta mensaje de error.
+* Autoriza el cambio de identidad por una de dos vías:
+*  - cuenta propia: misma cédula que la persona autenticada (comportamiento histórico)
+*  - cargo subrogado: existe una subrogación vigente que la habilita
 **/
-if($_SESSION["usua_doc"] == $rs->fields["USUA_CEDULA"] and trim($rs->fields["USUA_ESTA"])==1){
+if(($_SESSION["usua_doc"] == $rs->fields["USUA_CEDULA"] || $contextoSubrogado) and trim($rs->fields["USUA_ESTA"])==1){
 
-    //Cierra la session del usuario con el cargo anterior
-    // [REQ-4] Formato de fecha corregido: Y-m-d (guiones) en lugar de Y:m:d (dos puntos)
-    $sql_sesion = "update usuarios_sesion set usua_sesion='FIN  ".date("Y-m-d H:i:s")."' where usua_codi=".$_SESSION["usua_codi"];
-    $db->conn->query($sql_sesion);
+    if ($contextoSubrogado) {
+        // Se asume la identidad del CARGO, pero la sesión sigue perteneciendo a
+        // la persona: no se toca su fila de usuarios_sesion, de modo que el
+        // titular del puesto pueda seguir trabajando en paralelo con la suya.
+        $_SESSION["usua_codi"]        = $rs->fields["USUA_CODI"];
+        $_SESSION["usua_codi_real"]   = $usua_codi_real;
+        $_SESSION["subrogacion_codi"] = (int)$contextoSubrogado["USUA_SUBROGACION_CODI"];
 
-    $_SESSION["usua_codi"] = $rs->fields["USUA_CODI"];
-    //Crea o actualiza la session con el nuevo cargo
-    // [PHP 8.3] Acceso seguro a $_SERVER — las claves HTTP_* no siempre
-    // están presentes; el operador ?? evita E_WARNING "Undefined array key".
-    $dir_cliente = ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? '') . " - " . ($_SERVER['HTTP_CLIENT_IP'] ?? '') . " - " . ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
-    unset($recordSet);
-    $recordSet["USUA_SESION"] = $db->conn->qstr(session_id());
-    $recordSet["USUA_FECH_SESION"] = $db->conn->sysTimeStamp;
-    $recordSet["USUA_CODI"] = $_SESSION["usua_codi"];
-    $recordSet["USUA_INTENTOS"] = "0";
-    $recordSet["IP_CLIENTE"] = $db->conn->qstr($dir_cliente);
-    $db->conn->Replace("USUARIOS_SESION", $recordSet, "USUA_CODI", false,false,true,false);
+        $subrogacion->auditar(
+            (int)$contextoSubrogado["USUA_SUBROGACION_CODI"],
+            $usua_codi_real,
+            (int)$rs->fields["USUA_CODI"],
+            'CAMBIO_CONTEXTO');
+    } else {
+        // Cambio entre cuentas propias: la identidad de sesión se muda con el
+        // usuario, igual que antes del rediseño.
+        //Cierra la session del usuario con el cargo anterior
+        // [REQ-4] Formato de fecha corregido: Y-m-d (guiones) en lugar de Y:m:d (dos puntos)
+        $sql_sesion = "update usuarios_sesion set usua_sesion='FIN  ".date("Y-m-d H:i:s")."' where usua_codi=".(int)($_SESSION["usua_codi_sesion"] ?? $_SESSION["usua_codi"]);
+        $db->conn->query($sql_sesion);
+
+        $_SESSION["usua_codi"]        = $rs->fields["USUA_CODI"];
+        $_SESSION["usua_codi_sesion"] = $rs->fields["USUA_CODI"];
+        $_SESSION["usua_codi_real"]   = $rs->fields["USUA_CODI"];
+        $_SESSION["subrogacion_codi"] = 0;
+
+        //Crea o actualiza la session con el nuevo cargo
+        // [PHP 8.3] Acceso seguro a $_SERVER — las claves HTTP_* no siempre
+        // están presentes; el operador ?? evita E_WARNING "Undefined array key".
+        $dir_cliente = ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? '') . " - " . ($_SERVER['HTTP_CLIENT_IP'] ?? '') . " - " . ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+        unset($recordSet);
+        $recordSet["USUA_SESION"] = $db->conn->qstr(session_id());
+        $recordSet["USUA_FECH_SESION"] = $db->conn->sysTimeStamp;
+        $recordSet["USUA_CODI"] = $_SESSION["usua_codi"];
+        $recordSet["USUA_INTENTOS"] = "0";
+        $recordSet["IP_CLIENTE"] = $db->conn->qstr($dir_cliente);
+        $db->conn->Replace("USUARIOS_SESION", $recordSet, "USUA_CODI", false,false,true,false);
+    }
     $ValidacionKrd = "Si";
 
     $inst_codi = $rs->fields["INST_CODI"];

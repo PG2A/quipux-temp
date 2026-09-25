@@ -282,7 +282,7 @@ window.onload=init();
                 <?php
                 $depe_codi_admin = obtenerAreasAdmin($_SESSION["usua_codi"],$_SESSION["inst_codi"],$_SESSION["usua_admin_sistema"],$db);
                 $sql = "select depe_nomb, depe_codi from dependencia where depe_estado=1 and inst_codi=".$_SESSION["inst_codi"];
-                if ($depe_codi_admin!=0)
+                if (!empty($depe_codi_admin))
                 $sql.= " and depe_codi in ($depe_codi_admin)";
                 $sql.= " order by 1 asc";
                 $rs = $db->conn->query($sql);

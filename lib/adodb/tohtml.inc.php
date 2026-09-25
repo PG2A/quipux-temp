@@ -154,7 +154,11 @@ GLOBAL $gSQLMaxRows,$gSQLBlockRows,$ADODB_ROUND;
 			if (isset($scr_columns[$i])) {
 				// Raw HTML passthrough — render value verbatim (icons, links, img tags)
 				// If a HID_POPUP or HID_FUNCION column exists, wrap icon in a clickable link to open the document preview
-				if ($action_col_idx >= 0) {
+				// Opt-in: una celda que ya trae sus propios botones/enlaces (marca 'sin-envolver')
+				// se pinta tal cual, para no anidar enlaces ni disparar la acción de la fila.
+				if (strpos((string)$v, 'sin-envolver') !== false) {
+					$s .= "\t<TD align=center>$v</TD>\n";
+				} elseif ($action_col_idx >= 0) {
 					$popup_fn = $row_values[$action_col_idx] ?? '';
 					if ($popup_fn) {
 						// Use onclick + single-quoted args to avoid double-quote collision inside href=""
@@ -224,6 +228,10 @@ GLOBAL $gSQLMaxRows,$gSQLBlockRows,$ADODB_ROUND;
 					if ($htmlspecialchars) {
 						$v = htmlspecialchars($v);
 					}
+					// Etiqueta inline en columnas de texto escapado: {{badge:texto}} se
+					// pinta como <span class="badge-inline">texto</span> (estilos/mejoras.css).
+					// Se resuelve después de escapar, así el texto sigue sin poder inyectar HTML.
+					$v = preg_replace('/\{\{badge:(.*?)\}\}/', '<span class="badge-inline">$1</span>', $v);
 				} elseif ($v === null) {
 					$v = '(NULL)';
 				} else {

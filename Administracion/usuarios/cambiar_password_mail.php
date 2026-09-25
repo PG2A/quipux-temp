@@ -26,10 +26,13 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-// Initialize variables to prevent warnings
-$nombre_servidor = $nombre_servidor ?? "http://localhost/quipux";
-$cuenta_mail_soporte = $cuenta_mail_soporte ?? "soporte@example.com";
+// Los valores de config.php llegan vacíos cuando ese archivo se cargó dentro de
+// ConnectionHandler; $CFG es el único global que expone, así que se toma de ahí.
+global $CFG;
+if (empty($nombre_servidor))     $nombre_servidor     = $CFG->nombre_servidor ?? "http://localhost/quipux";
+if (empty($cuenta_mail_soporte)) $cuenta_mail_soporte = $CFG->cuenta_mail_soporte ?? "soporte@example.com";
 $support_mail_account = $support_mail_account ?? $cuenta_mail_soporte;
+$ruta_raiz = $ruta_raiz ?? dirname(__DIR__, 2);
 
 $sql = "select usua_codi, usua_cedula, usua_email, usua_nombre, tipo_usuario
         from usuario
@@ -78,9 +81,9 @@ if ($usr_email != "") {
     $mail .= "<br /><br /><b>Nota: </b>Este mensaje fue enviado autom&aacute;ticamente por el sistema, por favor no lo responda.";
     $mail .= "<br />Si tiene alguna inquietud respecto a este mensaje, comun&iacute;quese con <a href='mailto:$cuenta_mail_soporte'>$cuenta_mail_soporte</a>";
     $mail .= "</body></html>";
-//    echo "enviarMail($mail, 'Quipux: Registro de nueva cuenta.', $usr_email, $usr_nombre, $ruta_raiz);";
-
-    //comentar esta linea para que no envié correo al momento de crear un usuario 15/Abr/2019 por Carmita Rojas M.
-    //	enviarMail($mail, "Quipux: Cambio de contraseña.", $usr_email, $usr_nombre, $ruta_raiz);
+    // Sin este correo el usuario nunca conoce el enlace para definir su contraseña
+    // (la clave temporal es aleatoria y solo se guarda como hash). Estuvo
+    // comentado desde abril de 2019.
+    enviarMail($mail, "Quipux: Cambio de contraseña.", $usr_email, $usr_nombre, $ruta_raiz);
 }
 ?>

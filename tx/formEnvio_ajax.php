@@ -36,13 +36,24 @@ if (isset ($replicacion) && $replicacion && $config_db_replica_tx_formenvio_ajax
     $area = limpiar_sql($_GET["area"]);
     if (trim($area,",0123456789 ")!="") $area = 0 + $area;
 
+    // Reasignar un documento de periodo jerárquico: sólo los destinos que permiten
+    // las reglas por nivel (el grabado lo vuelve a validar en realizarTx.php).
+    if (($_GET["codTx"] ?? 0) == 9 && ($_GET["jer"] ?? 0) == 1) {
+        include_once(dirname(__DIR__).'/include/periodos/Jerarquia.php');
+        if (jerarquia_nivel_usuario($db, $_SESSION["usua_codi"]) !== null) {
+            echo jerarquia_combo_usuarios(jerarquia_destinos($db, $_SESSION["usua_codi"]), $area);
+            return;
+        }
+    }
+
     $where = "";
     if (($_GET["codTx"]==9)  and $_SESSION["depe_codi"] != $area)
         $where = " and (cargo_tipo=1 or usua_codi in (select usua_codi from permiso_usuario where id_permiso=29)) ";
 
-    $sql = "select (usua_apellido || ' ' || usua_nomb)
-                || ' ' || case when usua_codi in (select usua_subrogado from usuarios_subrogacion where usua_visible=1) = true then '(Subrogado)' else '' end
-                || ' ' || case when usua_codi in (select usua_subrogante from usuarios_subrogacion where usua_visible=1) = true then '(Subrogante)' else '' end as usua_nombre
+    // Sin las etiquetas "(Subrogado)" / "(Subrogante)" del modelo anterior: la
+    // subrogación ya es un contexto de sesión y no una cuenta, así que marcar la
+    // cuenta real del subrogante resultaba engañoso.
+    $sql = "select (usua_apellido || ' ' || usua_nomb) as usua_nombre
                 , usua_codi
             from usuarios
             where usua_codi>0 and usua_esta=1 and visible_sub=1 and usua_login not like 'UADM%'

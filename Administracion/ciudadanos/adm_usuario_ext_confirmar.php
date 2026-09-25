@@ -27,15 +27,19 @@
  */
 
 session_start();
-if($_SESSION["usua_admin_sistema"]!=1 and $_SESSION["usua_perm_ciudadano"]!=1) {
-    echo html_error("Lo sentimos, usted no tiene permisos suficientes para acceder a esta p&aacute;gina.");
-    die("");
-}
 include_once(dirname(__DIR__, 2).'/rec_session.php');
 require_once(dirname(__DIR__, 2).'/funciones.php'); //para traer funciones p_get y p_post
 include_once(dirname(__DIR__, 2).'/funciones_interfaz.php');
+// modo=solicitud: alta desde la búsqueda de destinatarios (RQT-7); ver adm_usuario_ext.php
+$modo_solicitud = (($_GET['modo'] ?? $_POST['modo'] ?? '') === 'solicitud');
+$puede_solicitar = ($modo_solicitud && ($_SESSION["tipo_usuario"] ?? 0) != 2
+                   && (($_SESSION["usua_prad_tp1"] ?? 0) == 1 || ($_SESSION["usua_perm_ciudadano"] ?? 0) == 1 || ($_SESSION["usua_admin_sistema"] ?? 0) == 1));
+if (!$puede_solicitar and ($_SESSION["usua_admin_sistema"] ?? 0) != 1 and ($_SESSION["usua_perm_ciudadano"] ?? 0) != 1) {
+    echo html_error("Lo sentimos, usted no tiene permisos suficientes para acceder a esta p&aacute;gina.");
+    die("");
+}
 include_once("util_ciudadano.php");
-include_once("../usuarios/mnuUsuariosH.php");
+include_once("../usuarios/mnuUsuariosH.php"); // en modo solicitud no exige permiso 16 (ver ese archivo)
 
 $ciud = New Ciudadano($db);
 
@@ -80,6 +84,13 @@ if ($accion==1) {
 	$tmp_cedula = 9999999999-$ciu_codigo;
     $sql2 = " and ciu_codigo<>$ciu_codigo";
 }
+
+// Cédula ya registrada (otro ciudadano o un servidor público): se bloquea la
+// creación. La lista de "datos similares" de más abajo sigue siendo solo un aviso;
+// esto en cambio impide el botón "Crear Ciudadano".
+$cuenta_existente = ($ciu_sincedula == 1) ? null
+                  : $ciud->cuentaExistentePorCedula($tmp_cedula, ($accion == 1) ? 0 : $ciu_codigo);
+
 $paginador = new ADODB_Pager_Ajax(dirname(__DIR__, 2), "div_datos_confirmacion", "busqueda_pag_usuario_confirmar.php",
                   "ciu_apellido,ciu_nombre,ciu_empresa,ciu_cedula");
 ?>
@@ -214,6 +225,13 @@ if ($cod_impresion!=1)
             $ciud->cajaHidden('ciu_nuevo', $ciu_nuevo);            
             
             $ciud->cajaHidden('ciu_ciudad', $ciu_ciudad);
+            if ($modo_solicitud) {
+                $ciud->cajaHidden('modo', 'solicitud');
+                $ciud->cajaHidden('nurad', preg_replace('/\D/', '', (string)($_GET['nurad'] ?? $_POST['nurad'] ?? '')));
+                $ciud->cajaHidden('ent', (int)($_GET['ent'] ?? $_POST['ent'] ?? 0));
+                $ciud->cajaHidden('tipo_destinatario', ((int)($_POST['tipo_destinatario'] ?? 1) == 3) ? 3 : 1);
+                $ciud->cajaHidden('observacion_solicita', limpiar_sql($_POST['observacion_solicita'] ?? ''));
+            }
             
             //echo $sql;
             if (isset($_POST['ciu_apellido']) and $_POST['ciu_apellido']!='')
@@ -244,7 +262,7 @@ if ($cod_impresion!=1)
                      ) ";
                     if ($ciu_empresa!='')
                     $sql.= " or translate(UPPER(inst_nombre),'ÁÉÍÓÚÀÈÌÒÙÄËÏÖÜÑ','AEIOUAEIOUAEIOUN') 
-                    LIKE translate(upper('%$ciu_empresa%'),'ÁÉÍÓÚÀÈÌÒÙÄËÏÖÜÑ','AEIOUAEIOUAEIOUN') ) ";
+                    LIKE translate(upper('%$ciu_empresa%'),'ÁÉÍÓÚÀÈÌÒÙÄËÏÖÜÑ','AEIOUAEIOUAEIOUN') ";
                     $sql.=" ) ";
            
             $sql.= ' and usua_esta = 1';
@@ -267,7 +285,14 @@ if ($cod_impresion!=1)
             $rs = $db->conn->query($sql);
             $numeroReg = $rs->fields['CONTUSRCIU'];//sql
             $html="";
-            if($numeroReg==0) { //si no existen guarda directamente                
+            if ($cuenta_existente !== null) { // cédula duplicada: no se puede crear
+                echo $htmlCiu;
+                echo "<br/><center><span class='titulosError'>" . $ciud->mensajeCuentaExistente($cuenta_existente, $tmp_cedula) . "</span></center>";
+                if ($cuenta_existente['tipo_usuario'] == 2 && ($cuenta_existente['estado'] ?? 1) == 1 && ($_SESSION["usua_admin_sistema"]==1 || $_SESSION["usua_perm_ciudadano"]==1)) {
+                    echo "<br/><center><input type='button' class='botones_largo' value='Editar ciudadano existente' "
+                       . "onclick=\"location='adm_usuario_ext.php?accion=2&cerrar=$cerrar&cod_impresion=$cod_impresion&ciu_codigo=" . $cuenta_existente['usua_codi'] . "'\"/></center>";
+                }
+            } elseif($numeroReg==0) { //si no existen guarda directamente
                 $html.="</form></body</html>";
                 echo $html;
                 die("<script>document.frm_confirmar.submit()</script>");
@@ -288,11 +313,11 @@ if ($cod_impresion!=1)
             <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
             <?php           
-            if($_SESSION["usua_codi"]==0 || $_SESSION["usua_admin_sistema"]==1 || $_SESSION["usua_perm_ciudadano"]==1) {
+            if ($cuenta_existente === null && ($_SESSION["usua_codi"]==0 || $_SESSION["usua_admin_sistema"]==1 || $_SESSION["usua_perm_ciudadano"]==1)) {
                   ?>
                     <td>
                     <center>
-                        <input name="btn_aceptar" type="submit" class="botones_largo" value="Crear Ciudadano" onClick="return ValidarInformacion('ciu');"/>
+                        <input name="btn_aceptar" type="submit" class="botones_largo" value="<?=$modo_solicitud ? 'Enviar Solicitud' : 'Crear Ciudadano'?>" onClick="return ValidarInformacion('ciu');"/>
                     </center>
                     </td>
              <?php

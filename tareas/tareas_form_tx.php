@@ -73,17 +73,23 @@ $fecha_tarea = $fechaMaximaTarea;
 if ($validar_fecha==16){ 
     
     $usua_codi_ori = $_SESSION["usua_codi"];
-    $sqlFechaTarea = "select substr(max(fecha_maxima::text),1,10) as fecha_maxima from tarea where radi_nume_radi in ($whereFiltro) and estado=1 and usua_codi_ori=$usua_codi_ori";    
-    
+    $sqlFechaTarea = "select substr(max(fecha_maxima::text),1,16) as fecha_maxima from tarea where radi_nume_radi in ($whereFiltro) and estado=1 and usua_codi_ori=$usua_codi_ori";
+
     $rsFechaTarea = $db->query($sqlFechaTarea);
     $fechaMaximaTarea = $rsFechaTarea->fields["FECHA_MAXIMA"];
-    $fecha_tarea = $rsFechaTarea->fields["FECHA_MAXIMA"]; 
-    if (trim($fechaMaximaTarea)==''){//si no tiene fecha        
-        $fechaMaximaTarea=date('Y-m-d');
+    $fecha_tarea = $rsFechaTarea->fields["FECHA_MAXIMA"];
+    if (trim($fechaMaximaTarea)==''){//si no tiene fecha
+        $fechaMaximaTarea=date('Y-m-d H:i');
         $fecha_tarea = $fechaMaximaTarea;
     }
-    $validar_fecha=1;    
+    $validar_fecha=1;
 }
+
+// La fecha máxima ahora es un instante: el calendario captura el día y un combo
+// aparte la hora. Un tope sin hora se toma como el final de ese día.
+if (strlen(trim($fechaMaximaTarea)) <= 10) $fechaMaximaTarea = substr(trim($fechaMaximaTarea), 0, 10)." 23:59";
+$hora_tarea  = substr($fecha_tarea, 11, 5);
+$fecha_tarea = substr($fecha_tarea, 0, 10);
 echo "<!DOCTYPE html>".html_head();
 require_once("../js/ajax.js");
 
@@ -122,6 +128,24 @@ require_once("../js/ajax.js");
     }
 
 
+    // Instante límite de la tarea: el calendario da el día y el combo la hora.
+    function tarea_fecha_hora() {
+        return document.getElementById('fecha_tarea').value + ' ' +
+               document.getElementById('hora_tarea').value;
+    }
+
+    // Selecciona una hora en el combo; si no existe como opción, la agrega,
+    // para no perder topes guardados fuera del paso de 30 minutos.
+    function tarea_fijar_hora(valor) {
+        var sel = document.getElementById('hora_tarea');
+        for (var i = 0; i < sel.options.length; i++)
+            if (sel.options[i].value == valor) { sel.selectedIndex = i; return; }
+        var opt = document.createElement('option');
+        opt.value = valor; opt.text = valor;
+        sel.appendChild(opt);
+        sel.value = valor;
+    }
+
     function okTx() {
          // Verificamos que existan documentos seleccionados
         if(!verificar_chk()) {
@@ -138,13 +162,9 @@ require_once("../js/ajax.js");
             }
 
             // Verificamos la fecha de reasignación
-            var fechaActual = new Date(<?=date("Y")?>,<?=date("n")?>,<?=date("d")?>);
-            fecha_doc = document.getElementById('fecha_tarea').value;
-            var fecha = new Date(fecha_doc.substring(0,4),fecha_doc.substring(5,7), fecha_doc.substring(8,10));
-            var tiempoRestante = fecha.getTime() - fechaActual.getTime();
-            var dias = Math.floor(tiempoRestante / (1000 * 60 * 60 * 24));
-            if (dias < 0) {
-            alert ("La fecha máxima de tarea debe ser mayor a la fecha actual");
+            fecha_doc = tarea_fecha_hora();
+            if (fecha_doc < '<?=date("Y-m-d H:i")?>') {
+                alert ("La fecha y hora máxima de la tarea debe ser posterior a este momento");
                 return false;
             }
         }
@@ -169,13 +189,9 @@ require_once("../js/ajax.js");
         }
 
         // Verificamos la fecha de reasignación
-        var fechaActual = new Date(<?=date("Y")?>,<?=date("n")?>,<?=date("d")?>);
-        fecha_doc = document.getElementById('fecha_tarea').value;
-        var fecha = new Date(fecha_doc.substring(0,4),fecha_doc.substring(5,7), fecha_doc.substring(8,10));
-        var tiempoRestante = fecha.getTime() - fechaActual.getTime();
-        var dias = Math.floor(tiempoRestante / (1000 * 60 * 60 * 24));
-        if (dias < 0) {
-            alert ("La fecha máxima de tarea debe ser mayor a la fecha actual");
+        fecha_doc = tarea_fecha_hora();
+        if (fecha_doc < '<?=date("Y-m-d H:i")?>') {
+            alert ("La fecha y hora máxima de la tarea debe ser posterior a este momento");
             return false;
         }
 
@@ -261,13 +277,14 @@ require_once("../js/ajax.js");
     //Validar si la fecha maxima de tarea seleccionada por el usuario es mayor a la fecha maxima que puede tener
     function validar_fecha_maxima(){       
         var fechaMaximaTarea = document.getElementById('fecha_maxima_tarea').value;
-        var fechaSeleccionada = document.getElementById('fecha_tarea').value;
+        var fechaSeleccionada = tarea_fecha_hora();
         var seleccionBandeja = document.getElementById("txt_fech_tarea").value;
         if(document.getElementById('carpeta').value == 15 || seleccionBandeja==1) //Validamos fechas solo si la tarea va a ser creada desde la bandeja de "Tareas Recibidas"        
-            if(validarFechas(fechaSeleccionada, fechaMaximaTarea)==2)
+            if (fechaSeleccionada > fechaMaximaTarea)
             {
                 alert('La fecha máxima de tarea no puede ser mayor a: ' + fechaMaximaTarea);
-                document.getElementById('fecha_tarea').value = fechaMaximaTarea;
+                document.getElementById('fecha_tarea').value = fechaMaximaTarea.substring(0,10);
+                tarea_fijar_hora(fechaMaximaTarea.substring(11,16));
             }
     }
 </script>
@@ -363,8 +380,9 @@ require_once("../js/ajax.js");
                 <td  colspan="3" align='center'>
                     <input type='hidden' name='fecha_maxima_tarea' id='fecha_maxima_tarea' value='<?=$fechaMaximaTarea?>'>
                     <br>
-                    <b>Fecha M&aacute;xima de Tarea (aaaa-mm-dd): </b>
-                    <?php echo dibujar_calendario("fecha_tarea", $fecha_tarea, $ruta_raiz, "validar_fecha_maxima();"); ?>
+                    <b class="calphp_etiqueta" style="margin-left:0">Fecha M&aacute;xima de Tarea (aaaa-mm-dd):</b>
+                    <span class="calphp_inline"><?php echo dibujar_calendario("fecha_tarea", $fecha_tarea, $ruta_raiz, "validar_fecha_maxima();"); ?></span>
+                    <?php echo dibujar_combo_hora("hora_tarea", $hora_tarea, "validar_fecha_maxima();"); ?>
                     <br>
                 </td>
             </tr>

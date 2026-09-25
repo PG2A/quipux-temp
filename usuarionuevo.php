@@ -26,7 +26,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-    include_once(__DIR__.'funciones_interfaz.php');
+    include_once(__DIR__.'/funciones_interfaz.php');
 
 ?>
 <!DOCTYPE html>

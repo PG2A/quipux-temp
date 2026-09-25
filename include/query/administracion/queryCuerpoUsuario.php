@@ -47,9 +47,24 @@ switch($db->getDriver())	{
             , u.depe_nomb AS \"Área\"
             , u.usua_cargo AS \"Puesto\"
             , u.usua_cargo_cabecera AS \"Puesto Cabecera\"
-            , case when u.usua_esta = 1 then 'Activo' else 'Inactivo' end AS  \"Estado\"";
+            , case when u.usua_esta = 1
+                   then '<span class=\"sin-envolver\" style=\"display:inline-block;padding:2px 10px;border-radius:10px;background:#e6f4ea;color:#1e7e34;font-weight:600\">Activo</span>'
+                   else '<span class=\"sin-envolver\" style=\"display:inline-block;padding:2px 10px;border-radius:10px;background:#fdecea;color:#c5221f;font-weight:600\">Inactivo</span>'
+              end AS \"SCR_Estado\"";
         if (isset($_SESSION["usua_codi"]) && $_SESSION["usua_codi"]==0) $sql .= ", u.inst_nombre as \"Institución\"";
-       
+
+        // Vigencia de la cuenta (fecha inicio / fin, en 'usuarios').
+        $sql .= ", (select case when x.usua_vigencia_desde is null and x.usua_vigencia_hasta is null then 'Sin límite'
+                                else coalesce(to_char(x.usua_vigencia_desde,'YYYY-MM-DD'),'…') || ' a '
+                                  || coalesce(to_char(x.usua_vigencia_hasta,'YYYY-MM-DD'),'sin fin') end
+                      from usuarios x where x.usua_codi = u.usua_codi) AS \"Vigencia\"";
+
+        // Acciones por fila. La marca 'sin-envolver' hace que el paginador pinte la
+        // celda tal cual (sin envolverla en el enlace de la fila).
+        $sql .= ", '<span class=\"sin-envolver\">'
+                   || '<input type=\"button\" class=\"botones\" value=\"Editar\" onclick=\"seleccionar_usuario(' || u.usua_codi || ');\">'
+                   || '</span>' AS \"SCR_Acciones\"";
+
 
         $sql .= " from usuario u";
         if ($permiso!="0") $sql .= " left outer join permiso_usuario p on u.usua_codi=p.usua_codi and p.id_permiso=$permiso";

@@ -1,0 +1,512 @@
+# SDD Specification: fix-logout-and-security
+
+> **Change ID**: fix-logout-and-security
+> **Status**: draft
+> **Created**: 2026-05-28
+> **Author**: Architect (from CodeGraph analysis session)
+> **Priority**: CRITICAL (security vulnerability + broken SLO)
+
+---
+
+## 1. Problem Statement
+
+Quipux-UCC has a dual authentication system (SAML/ADFS + Database local) with three
+critical defects in the logout and session management flow:
+
+1. **No Single Logout (SLO)**: `cerrar_session.php` destroys the local PHP session
+   but never notifies the ADFS Identity Provider. Users authenticated via SAML can
+   re-enter immediately via ADFS SSO after "logging out" — the logout is fictitious.
+
+2. **Post-logout redirect to `login.php` instead of `index.php`**: After logout,
+   the system renders the local-only login form inside an iframe, instead of
+   redirecting to the dual-entry portal (`index.php`). Users lose the SAML option.
+
+3. **Administrator authentication bypass**: `login_ldap.php` allows login as
+   "ADMINISTRADOR" with ANY password (hardcoded bypass at line 46-51). Additionally,
+   `rec_session.php` skips `usua_codi` validation for UADMINISTRADOR (line 45-51).
+
+The SAML SLS endpoint (`saml/sls.php`) already contains correct SLO logic and the
+session already stores `samlNameId`/`samlSessionIndex` — the infrastructure exists,
+it is simply not connected to the logout flow.
+
+---
+
+## 2. Scope
+
+### 2.1 Files In Scope
+
+| File | Role | Change Type |
+|------|------|-------------|
+| `cerrar_session.php` | Logout handler | **Rewrite** — detect auth method, invoke SLO, redirect to index.php |
+| `saml/sls.php` | SAML Single Logout Service | **Modify** — redirect to `/index.php` instead of `/login.php` |
+| `login_ldap.php` | Auth helper function | **Modify** — remove ADMINISTRADOR bypass |
+| `rec_session.php` | Session guard | **Modify** — remove UADMINISTRADOR bypass, fix fallback links |
+| `f_top.php` | Top frame with logout button | **Modify** — adjust form target and JS redirect |
+| `paginaError.php` | Session error page | **Modify** — change link from login.php to index.php |
+| `login.php` | Local login form | **Modify** — set `auth_method` in session, redirect to index.php on re-entry |
+| `saml/accs.php` | SAML Assertion Consumer Service | **Modify** — set `auth_method = 'saml'` explicitly |
+
+### 2.2 Files Out of Scope
+
+- `AuthenticationManager.php` — modern class, not wired into the active login flow
+- `SessionManager.php` — already correct; will be consumed by `cerrar_session.php`
+- `SessionValidator.php` — not in the active request path
+- `session_orfeo.php` — legacy, not the active session guard
+- `index.php` — portal dual, no changes needed (already correct)
+- `index_frames.php` — frameset, no changes needed
+
+---
+
+## 3. Requirements
+
+### REQ-1: Mark authentication method in session
+
+**Priority**: High
+**Rationale**: Without knowing HOW the user authenticated, we cannot decide whether
+to invoke SAML SLO on logout.
+
+**Changes**:
+
+- `saml/accs.php` — After line 139 (`$_SESSION['samlSessionIndex'] = ...`), add:
+  ```php
+  $_SESSION['auth_method'] = 'saml';
+  ```
+
+- `login.php` — After line 61 (`$_SESSION["initiated"] = true;`), add:
+  ```php
+  $_SESSION["auth_method"] = 'database';
+  ```
+
+**Acceptance Criteria**:
+- After SAML login, `$_SESSION['auth_method']` === `'saml'`
+- After DB login, `$_SESSION['auth_method']` === `'database'`
+- Existing session variables are not disturbed
+
+---
+
+### REQ-2: Conditional SLO in cerrar_session.php
+
+**Priority**: Critical
+**Rationale**: This is the core fix — without SLO, ADFS sessions persist after
+local logout, making logout ineffective for SAML users.
+
+**Changes**:
+
+Rewrite `cerrar_session.php` with this logic:
+
+```
+1. Start session (session_start)
+2. Extract SAML data BEFORE destroying session:
+     $auth_method      = $_SESSION['auth_method'] ?? 'database'
+     $samlNameId       = $_SESSION['samlNameId'] ?? null
+     $samlSessionIndex = $_SESSION['samlSessionIndex'] ?? null
+3. Destroy local session via SessionManager::destroySession()
+4. IF auth_method === 'saml' AND samlNameId is not null:
+     - Redirect to saml/sls.php?nameId=...&sessionIndex=...&returnTo=/index.php
+     - (sls.php will send LogoutRequest to ADFS IdP)
+   ELSE:
+     - Redirect to index.php
+```
+
+**Critical implementation note**: The SAML NameId and SessionIndex MUST be extracted
+from `$_SESSION` BEFORE `session_destroy()`. After destruction, they are unavailable.
+Pass them as query parameters to `saml/sls.php` so the SLS can construct the
+LogoutRequest even without an active PHP session.
+
+**Acceptance Criteria**:
+- SAML user clicking "Cerrar Sesion" triggers a LogoutRequest to ADFS
+- DB user clicking "Cerrar Sesion" redirects directly to index.php (no IdP contact)
+- Local session is fully destroyed in both paths (PHP session + BD record + cookie)
+- SAML data is available to sls.php even after local session destruction
+
+---
+
+### REQ-3: Redirect post-logout to index.php (dual portal)
+
+**Priority**: High
+**Rationale**: Users must see the dual-entry portal (SAML + Local buttons) after
+logout, not the raw local-only login form.
+
+**Changes**:
+
+| File | Current | New |
+|------|---------|-----|
+| `cerrar_session.php` line 61 | `die (include "./login.php");` | `header('Location: index.php'); exit;` |
+| `cerrar_session.php` line 56 | `die("<script>window.close();</script>");` | `header('Location: index.php'); exit;` |
+| `saml/sls.php` line 12 | `header('Location: /login.php');` | `header('Location: /index.php');` |
+| `saml/sls.php` line 19 | `$returnTo = '/login.php';` | `$returnTo = '/index.php';` |
+| `paginaError.php` line 43 | `href='$nombre_servidor/login.php'` | `href='$nombre_servidor/index.php'` |
+| `rec_session.php` line 77 | `<a href='login.php'>` | `<a href='index.php'>` |
+| `rec_session.php` line 115 | `<a href='login.php'>` | `<a href='index.php'>` |
+| `rec_session.php` line 146 | `<a href='login.php'>` | `<a href='index.php'>` |
+| `rec_session.php` line 199 | `<a href='login.php'>` | `<a href='index.php'>` |
+
+**Acceptance Criteria**:
+- After logout (any method), browser URL ends at `index.php`
+- The dual-entry portal is displayed (both SAML and Local buttons visible)
+- No iframe nesting of login forms
+
+---
+
+### REQ-4: Remove ADMINISTRADOR authentication bypass
+
+**Priority**: Critical (security vulnerability)
+**Rationale**: Any user can log in as ADMINISTRADOR with an arbitrary password.
+This is an authentication bypass vulnerability.
+
+**Changes**:
+
+- `login_ldap.php` — Remove lines 46-51:
+  ```php
+  // DELETE THIS BLOCK:
+  if (strtoupper($user) === 'ADMINISTRADOR') {
+      $_SESSION['user']   = $user;
+      $_SESSION['krd']    = $user;
+      $_SESSION['access'] = 1;
+      return true;
+  }
+  ```
+
+- `rec_session.php` — Remove lines 45-51 (the UADMINISTRADOR bypass):
+  ```php
+  // DELETE THIS BLOCK:
+  if(($_SESSION['krd'] ?? '') != 'UADMINISTRADOR') {
+      if (!isset($_SESSION['usua_codi']) || $_SESSION['usua_codi'] <= 0) {
+          $session_valida = false;
+          $razon_error = "SESSION['usua_codi'] no establecida o inválida";
+          error_log("ERROR: $razon_error");
+      }
+  }
+  ```
+  Replace with the unconditional validation:
+  ```php
+  if (!isset($_SESSION['usua_codi']) || $_SESSION['usua_codi'] <= 0) {
+      $session_valida = false;
+      $razon_error = "SESSION['usua_codi'] no establecida o inválida";
+      error_log("ERROR: $razon_error");
+  }
+  ```
+
+**Pre-condition**: The ADMINISTRADOR user must have a valid `usua_codi > 0` in the
+`usuarios` table. If the current record has `usua_codi = 0`, a DB migration must
+assign a valid code BEFORE deploying this change.
+
+**Acceptance Criteria**:
+- Login as "ADMINISTRADOR" with wrong password → authentication fails
+- Login as "ADMINISTRADOR" with correct password → authentication succeeds (via DB)
+- Session validation requires `usua_codi > 0` for ALL users including admin
+- No hardcoded username bypasses remain in the codebase
+
+---
+
+### REQ-5: Use SessionManager for session destruction
+
+**Priority**: Medium
+**Rationale**: `SessionManager::destroySession()` provides complete cleanup:
+registers cierre in BD, clears `$_SESSION`, removes session cookie, calls
+`session_destroy()`. The current manual foreach in `cerrar_session.php` is
+incomplete (does not remove the cookie).
+
+**Changes**:
+
+- `cerrar_session.php` — Replace the manual destruction block (lines 50-53):
+  ```php
+  // DELETE:
+  foreach ($_SESSION as $key => $value) {
+      unset ($_SESSION[$key]);
+  }
+  session_destroy();
+  ```
+  With:
+  ```php
+  require_once(__DIR__ . '/include/db/ConnectionHandler.php');
+  $db = new ConnectionHandler(__DIR__);
+  require_once(__DIR__ . '/SessionManager.php');
+  $sessionManager = new SessionManager($db);
+  $sessionManager->destroySession();
+  ```
+
+**Acceptance Criteria**:
+- Session cookie is explicitly removed on logout
+- `usuarios_sesion` record is updated with `fecha_cierre`
+- `$_SESSION` is fully cleared
+- `session_destroy()` is called
+
+---
+
+## 4. Scenarios
+
+### ESC-1: SAML user closes session (SP-initiated SLO)
+
+```
+GIVEN:  User authenticated via ADFS
+        ($_SESSION['auth_method'] = 'saml')
+        ($_SESSION['samlNameId'] = 'user@ucuenca.edu.ec')
+        ($_SESSION['samlSessionIndex'] = 'id-abc123')
+WHEN:   User clicks "Cerrar Sesion" in f_top.php
+THEN:   1. cerrar_session.php extracts samlNameId and samlSessionIndex
+        2. Local PHP session is destroyed via SessionManager::destroySession()
+        3. Browser redirects to saml/sls.php with SAML parameters
+        4. sls.php constructs and sends LogoutRequest to ADFS
+        5. ADFS processes logout, sends LogoutResponse
+        6. sls.php processes LogoutResponse, redirects to /index.php
+        7. User sees dual-entry portal (no automatic re-authentication)
+```
+
+### ESC-2: Database user closes session (no SLO)
+
+```
+GIVEN:  User authenticated via local DB
+        ($_SESSION['auth_method'] = 'database')
+WHEN:   User clicks "Cerrar Sesion" in f_top.php
+THEN:   1. cerrar_session.php detects auth_method = 'database'
+        2. Local PHP session is destroyed via SessionManager::destroySession()
+        3. No contact with ADFS IdP
+        4. Browser redirects to index.php
+        5. User sees dual-entry portal
+```
+
+### ESC-3: IdP-initiated SLO (ADFS forces logout)
+
+```
+GIVEN:  User has active session in Quipux (authenticated via SAML)
+WHEN:   ADFS administrator forces session termination
+        ADFS sends LogoutRequest to saml/sls.php
+THEN:   1. sls.php receives SAMLRequest parameter
+        2. $auth->processSLO(false) destroys local session
+        3. session_destroy() is called
+        4. LogoutResponse is sent back to ADFS
+        5. Browser redirects to /index.php
+```
+
+### ESC-4: Session timeout (SAML user, inactivity)
+
+```
+GIVEN:  User authenticated via SAML, inactive for > 30 minutes
+WHEN:   User attempts any action (rec_session.php validates)
+THEN:   1. rec_session.php detects timeout
+        2. Local PHP session is destroyed
+        3. paginaError.php is displayed with link to index.php
+        4. IdP is NOT notified (best-effort SLO — acceptable)
+        5. ADFS session will expire by its own timeout policy
+```
+
+### ESC-5: Administrator login requires valid password
+
+```
+GIVEN:  Bypass code removed from login_ldap.php
+        ADMINISTRADOR user exists in BD with usua_codi > 0
+WHEN:   User enters "ADMINISTRADOR" with incorrect password
+THEN:   1. autenticar() queries BD for USUA_LOGIN = 'UADMINISTRADOR'
+        2. Password hash comparison fails
+        3. autenticar() returns false
+        4. login.php displays "Usuario o contraseña incorrectos"
+```
+
+### ESC-6: Administrator login with correct password succeeds
+
+```
+GIVEN:  Bypass code removed from login_ldap.php
+        ADMINISTRADOR user exists in BD with valid password hash
+WHEN:   User enters "ADMINISTRADOR" with correct password
+THEN:   1. autenticar() queries BD, finds user
+        2. Password hash matches
+        3. autenticar() returns true
+        4. Session is created with usua_codi > 0
+        5. User enters index_frames.php normally
+```
+
+### ESC-7: Post-logout always shows dual portal
+
+```
+GIVEN:  Any authenticated user (SAML or DB)
+WHEN:   User logs out via any path:
+        - Clicking "Cerrar Sesion" button
+        - Session timeout → paginaError.php link
+        - rec_session.php invalid session → fallback link
+THEN:   Browser navigates to index.php
+        Dual-entry portal is displayed with both options:
+        - "Ingresar con Correo Institucional" (SAML/ADFS)
+        - "Ingresar con Usuario Local" (DB)
+```
+
+### ESC-8: cerrar_ventana parameter still works
+
+```
+GIVEN:  Any authenticated user
+WHEN:   Logout is triggered with ?cerrar_ventana parameter
+        (e.g. from a popup window)
+THEN:   1. Local session is destroyed
+        2. Browser redirects to index.php (not window.close)
+        NOTE: window.close() is unreliable across browsers;
+              redirect to index.php is the safe fallback
+```
+
+---
+
+## 5. Implementation Order
+
+The dependency graph dictates this sequence:
+
+```
+REQ-4 (remove bypass) ──→ REQ-5 (SessionManager unified)
+REQ-1 (auth_method)   ──→ REQ-2 (conditional SLO)
+REQ-2 (conditional SLO)──→ REQ-3 (redirect index.php)
+REQ-3 (redirect)      ──→ REQ-5 (SessionManager unified)
+```
+
+### Phase 1: Security Fix (deploy immediately)
+
+| Step | Requirement | Files | Risk | Verification |
+|------|-------------|-------|------|--------------|
+| 1.1 | REQ-4 | `login_ldap.php`, `rec_session.php` | **Requires DB pre-check**: ADMINISTRADOR must have `usua_codi > 0` | Login as admin with wrong password → fail. Login with correct password → succeed. |
+| 1.2 | REQ-1 | `saml/accs.php`, `login.php` | Low — additive only | After SAML login: `$_SESSION['auth_method'] === 'saml'`. After DB login: `=== 'database'` |
+
+### Phase 2: Logout Flow Fix (deploy after Phase 1 verified)
+
+| Step | Requirement | Files | Risk | Verification |
+|------|-------------|-------|------|--------------|
+| 2.1 | REQ-5 | `cerrar_session.php` | Low — SessionManager already tested | After logout: cookie removed, BD updated, session empty |
+| 2.2 | REQ-3 | `cerrar_session.php`, `saml/sls.php`, `paginaError.php`, `rec_session.php` | Low — URL changes only | After logout: browser at `index.php`, dual portal visible |
+| 2.3 | REQ-2 | `cerrar_session.php`, `saml/sls.php` | **High** — requires ADFS SLO endpoint active | SAML user logout → ADFS LogoutRequest sent → no auto re-auth |
+
+### Phase 2.3 Pre-deployment Checklist
+
+Before deploying REQ-2, verify with infrastructure team:
+
+- [ ] ADFS has Single Logout Service endpoint enabled
+- [ ] ADFS SLO endpoint URL matches `saml/settings.php` → `idp.singleLogoutService.url`
+- [ ] ADFS accepts signed LogoutRequest (settings: `logoutRequestSigned = true`)
+- [ ] ADFS can reach `https://devdocs.ucuenca.edu.ec/saml/sls.php` (firewall)
+- [ ] Test with `saml/test_login.php` first in staging environment
+
+---
+
+## 6. Risks
+
+| ID | Risk | Severity | Probability | Mitigation |
+|----|------|----------|-------------|------------|
+| R1 | ADFS does not support SLO / SLO endpoint disabled | High | Medium | Verify with infra team BEFORE Phase 2.3. If unsupported, implement local-only logout with user-visible warning: "Su sesion local ha sido cerrada. Cierre tambien su sesion institucional." |
+| R2 | PHP session destroyed before SAML LogoutRequest can be sent | High | High | Extract `samlNameId` and `samlSessionIndex` from `$_SESSION` BEFORE calling `SessionManager::destroySession()`. Pass as query params to sls.php. |
+| R3 | ADMINISTRADOR has `usua_codi = 0` in BD — removing bypass blocks admin access | High | Low | Pre-deployment DB check: `SELECT usua_codi FROM usuarios WHERE UPPER(usua_login) = 'UADMINISTRADOR'`. If 0, assign valid code via migration. |
+| R4 | Race condition: user closes browser tab before SLO completes | Medium | Medium | SLO is best-effort by SAML spec. ADFS session expires by its own timeout. Acceptable. |
+| R5 | Popup blocker prevents local login window | Low | Medium | Already handled with try/catch in index.php. Future: replace popup with in-page redirect. |
+| R6 | `window.close()` removed from cerrar_session.php may affect popup workflows | Low | Low | Redirect to index.php is more reliable than window.close() across browsers. Any popup that relied on this will gracefully show the portal instead. |
+
+---
+
+## 7. Architecture Diagram (Current vs. Proposed)
+
+### Current Flow (BROKEN)
+
+```
+[User clicks "Cerrar Sesion"]
+  │
+  ▼
+cerrar_session.php
+  ├── UPDATE usuarios_sesion SET usua_sesion='FIN ...'
+  ├── foreach $_SESSION → unset
+  ├── session_destroy()
+  └── include login.php  ← WRONG: shows form in iframe, no SLO
+```
+
+### Proposed Flow (FIXED)
+
+```
+[User clicks "Cerrar Sesion"]
+  │
+  ▼
+cerrar_session.php
+  ├── Extract: auth_method, samlNameId, samlSessionIndex
+  ├── SessionManager::destroySession()  ← Complete cleanup
+  │
+  ├── [auth_method = 'saml' AND samlNameId exists?]
+  │     │
+  │     ├── YES ──────────────────────────────────────┐
+  │     │                                              │
+  │     └── NO ──► header('Location: index.php')       │
+  │                                                   │
+  ▼                                                   ▼
+saml/sls.php?nameId=...&sessionIndex=...&returnTo=/index.php
+  │
+  ├── [SAMLRequest or SAMLResponse present?]
+  │     ├── YES → $auth->processSLO() → session_destroy()
+  │     └── NO  → $auth->logout($returnTo, [], $nameId, $sessionIndex)
+  │               (sends LogoutRequest to ADFS IdP)
+  │
+  └── header('Location: /index.php')  ← Dual portal
+```
+
+---
+
+## 8. Data Dictionary (Session Variables)
+
+| Variable | Set By | Used By | Change |
+|----------|--------|---------|--------|
+| `auth_method` | `accs.php` / `login.php` | `cerrar_session.php` | **NEW** |
+| `samlNameId` | `accs.php` (line 138) | `saml/sls.php` | Existing, no change |
+| `samlSessionIndex` | `accs.php` (line 139) | `saml/sls.php` | Existing, no change |
+| `krd` | `login.php` / `accs.php` | Everywhere | No change |
+| `usua_codi` | `login.php` / `accs.php` | `rec_session.php`, everywhere | Validation tightened (no bypass) |
+| `initiated` | `login.php` / `accs.php` | `rec_session.php` | No change |
+| `hora_session` | `login.php` / `accs.php` | `rec_session.php` | No change |
+
+---
+
+## 9. Verification Plan
+
+### 9.1 Manual Test Matrix
+
+| # | Test | Steps | Expected Result |
+|---|------|-------|-----------------|
+| T1 | SAML login → logout | Login via ADFS → Click "Cerrar Sesion" | ADFS LogoutRequest sent, redirected to index.php |
+| T2 | DB login → logout | Login via local form → Click "Cerrar Sesion" | Direct redirect to index.php, no IdP contact |
+| T3 | SAML login → re-auth after logout | T1 → Click "Ingresar con Correo Institucional" | ADFS prompts for credentials (no auto SSO) |
+| T4 | Admin wrong password | Enter ADMINISTRADOR + wrong password | "Usuario o contraseña incorrectos" |
+| T5 | Admin correct password | Enter ADMINISTRADOR + correct password | Login succeeds, usua_codi > 0 in session |
+| T6 | Session timeout | Wait 31 min → click any action | paginaError.php with link to index.php |
+| T7 | IdP-initiated SLO | ADFS admin forces logout | Quipux session destroyed, redirect to index.php |
+| T8 | Post-logout portal | Any logout path | index.php shows both SAML and Local buttons |
+
+### 9.2 Automated Checks
+
+```bash
+# Verify no bypass remains
+grep -rn "ADMINISTRADOR" login_ldap.php | grep -v "//\|comment"
+# Expected: no matches (bypass removed)
+
+# Verify all redirects point to index.php
+grep -rn "login\.php" cerrar_session.php saml/sls.php paginaError.php rec_session.php
+# Expected: no matches (all changed to index.php)
+
+# Verify auth_method is set
+grep -rn "auth_method" saml/accs.php login.php cerrar_session.php
+# Expected: 3 matches (set in accs, set in login, read in cerrar_session)
+
+# Verify SessionManager usage
+grep -rn "SessionManager" cerrar_session.php
+# Expected: match found
+```
+
+---
+
+## 10. Rollback Plan
+
+If issues arise after deployment:
+
+| Phase | Rollback |
+|-------|----------|
+| Phase 1.1 (REQ-4) | Re-add bypass block in `login_ldap.php` and `rec_session.php`. **Only if** admin access is blocked and no DB fix is possible. |
+| Phase 1.2 (REQ-1) | Remove `auth_method` lines from `accs.php` and `login.php`. No side effects. |
+| Phase 2.1 (REQ-5) | Replace SessionManager call with manual foreach + session_destroy. |
+| Phase 2.2 (REQ-3) | Change index.php redirects back to login.php. |
+| Phase 2.3 (REQ-2) | Remove SLO conditional — always redirect to index.php (skip SLS). This reverts to local-only logout. |
+
+---
+
+## 11. References
+
+- SAML 2.0 Logout Protocol: https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf (Section 4.4)
+- OneLogin php-saml SLO: https://github.com/SAML-Toolkits/php-saml#single-logout-slo
+- ADFS 2.0+ SLO configuration: https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-R2-and-2012/dn688076(v=ws.11)
+- CodeGraph analysis session: 2026-05-28 (symbols: 200 across 60 files)

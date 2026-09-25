@@ -102,6 +102,32 @@ function obtener_nivel_seguridad_documento($db, $radi_nume) {
                 return 3;
         }
 
+        // Documentos que pasaron por una subrogación. Tanto el titular del puesto
+        // como quien lo subrogó pueden consultarlos desde su cuenta propia,
+        // durante el período y una vez finalizado.
+        //
+        // Hace falta una regla propia porque las acciones del subrogante constan
+        // en el histórico a nombre del CARGO, no suyas: sin esto vería el
+        // documento listado en su bandeja pero no podría abrirlo.
+        //
+        // La existencia de la tabla se comprueba una sola vez por petición, para
+        // no romper instalaciones donde aún no se aplicó el esquema.
+        static $existe_tabla_subrogacion = null;
+        if ($existe_tabla_subrogacion === null) {
+            $rs_t = $db->query("select to_regclass('radicado_subrogacion') as tabla");
+            $existe_tabla_subrogacion = ($rs_t && !$rs_t->EOF && trim($rs_t->fields["TABLA"] ?? '') != '');
+        }
+        if ($existe_tabla_subrogacion) {
+            $sql = "select 1 as num
+                      from radicado_subrogacion rs
+                      join usuarios_subrogacion s on s.usua_subrogacion_codi = rs.usua_subrogacion_codi
+                     where rs.radi_nume_radi = $radi_nume
+                       and ".$_SESSION["usua_codi"]." in (s.usua_subrogante, s.usua_subrogado)
+                     limit 1";
+            $rs_subr = $db->query($sql);
+            if ($rs_subr && !$rs_subr->EOF) return 3;
+        }
+
         // Si es el remitente o destinatario del documento
         if ($radi_tipo==1 and ($usr_rem or $usr_dest)) return 3;
         if (($_SESSION["usua_admin_archivo"] == 1 or $_SESSION["usua_perm_archivo"] == 1) and $inst_actu) return 3;

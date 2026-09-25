@@ -76,6 +76,8 @@ if ($carpeta==0) {
         if ($carpeta==14) $estado=14;
         if ($carpeta==15) $estado=15;
         if ($carpeta==16) $estado=16;
+        if ($carpeta==17) $estado=17; //Trámites del puesto durante su subrogación
+        if ($carpeta==18) $estado=18; //Trámites gestionados como subrogante
         if ($carpeta==82) $estado=82;
         if ($carpeta==83) $estado=83;
         if ($carpeta==84) $estado=84;

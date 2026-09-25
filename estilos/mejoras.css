@@ -55,3 +55,56 @@ table.comprobante-card{max-width:430px}
 .comprobante-pie input.botones_largo:hover{background:#e3ecff !important;box-shadow:none !important}
 @media(max-width:520px){.comprobante-wrap{padding:16px 10px}.comprobante-body{padding:16px 14px 18px}}
 
+.sumillas-wrap{padding:16px 14px 26px;box-sizing:border-box}
+.sumillas-wrap .barra_busqueda_top td{padding:5px 9px}
+.sumillas-wrap .sumillas-botonera{margin:0 0 12px;text-align:right}
+.sumillas-wrap table.sumillas-form{width:100%;max-width:620px;margin:0 0 14px;border-collapse:separate;border-spacing:0}
+.sumillas-wrap table.sumillas-form td{padding:9px 12px;vertical-align:middle}
+.sumillas-wrap table.sumillas-form td.titulos2{width:150px;white-space:nowrap}
+.sumillas-wrap .sumillas-nota{display:block;color:#5a6478;font-size:11px;margin-top:4px}
+
+
+.sumillas-arbol{max-height:230px;overflow:auto;background:#fff;border:1px solid #b9c2d6;border-radius:8px;padding:8px 10px;font-size:11px;text-align:left}
+.sumillas-arbol ul.sumillas-nivel{list-style:none;margin:0;padding:0}
+.sumillas-arbol ul.sumillas-nivel ul.sumillas-nivel{padding-left:14px;border-left:1px dotted #b9c2d6;margin-left:5px}
+.sumillas-arbol li{margin:1px 0;line-height:1.6}
+.sumillas-arbol .sumillas-toggle{display:block;cursor:pointer;font-weight:600;color:#0b5fa5;padding:2px 4px;border-radius:5px;user-select:none}
+.sumillas-arbol .sumillas-toggle:hover{background:#e3ecff}
+.sumillas-arbol .sumillas-toggle:before{content:'\25BE';display:inline-block;width:12px;color:#8a94a8}
+.sumillas-arbol li.cerrada > .sumillas-toggle:before{content:'\25B8'}
+.sumillas-arbol li.cerrada > ul.sumillas-nivel{display:none}
+.sumillas-arbol a.sumillas-item{display:block;cursor:pointer;padding:2px 6px 2px 4px;border-radius:5px;color:#0b1c30 !important;text-decoration:none !important;font-weight:400}
+.sumillas-arbol a.sumillas-item:before{content:'\2713';display:inline-block;width:13px;color:transparent}
+.sumillas-arbol a.sumillas-item:hover{background:#f3f6fc}
+.sumillas-arbol a.sumillas-item.seleccionada{background:#e3ecff;color:#0b5fa5 !important;font-weight:600}
+.sumillas-arbol a.sumillas-item.seleccionada:before{color:#0b5fa5}
+
+/* Etiqueta inline dentro de las celdas de las bandejas ({{badge:texto}} en tohtml.inc.php) */
+.badge-inline{color:#e67e22;font-size:9px;font-weight:600;white-space:nowrap}
+
+/* Campo de sólo lectura (p. ej. Puesto: se elige del combo, no se escribe) */
+input.tex_area_ro{background:#eef1f6;color:#333;border:1px solid #c4ccdb;cursor:not-allowed}
+
+/* Pestañas de la administración de Áreas y Puestos (vista tabla / árbol) */
+.tabs-barra{border-bottom:2px solid #b9c2d6}
+.tabs-barra .tab-button{border:1px solid #b9c2d6;border-bottom:none;background:#eef1f6;color:#334;
+  padding:6px 16px;margin-right:4px;border-radius:7px 7px 0 0;cursor:pointer;font-weight:600}
+.tabs-barra .tab-button.activa{background:#fff;color:#0b5fa5;position:relative;top:2px}
+.tabs-barra .tab-button:hover{background:#e3ecff}
+
+/* Combo con buscador (js/select_buscador.js) para dependencia y puesto */
+.sb-wrap{position:relative;display:inline-block}
+.sb-input{padding:2px 6px}
+.sb-drop{position:absolute;left:0;top:100%;z-index:9999;min-width:100%;max-height:240px;overflow:auto;
+  background:#fff;border:1px solid #b9c2d6;border-radius:0 0 6px 6px;box-shadow:0 6px 14px rgba(0,0,0,.12)}
+.sb-drop .sb-item{padding:4px 8px;cursor:pointer;white-space:nowrap;font-size:12px}
+.sb-drop .sb-item:hover{background:#e3ecff}
+.sb-drop .sb-item.sb-sel{background:#f3f6fc;font-weight:600}
+.sb-drop .sb-vacio{padding:6px 8px;color:#8a94a8;font-style:italic;font-size:12px}
+
+/* Áreas y Puestos (y demás listados en #div_cuerpo): línea separadora entre filas
+   y realce al pasar el mouse. Se apunta a las filas de datos del paginador. */
+#div_cuerpo table tr.leidos > td,
+#div_cuerpo table tr.no_leidos > td{border-bottom:1px solid #cdd6e6}
+#div_cuerpo table tr.leidos:hover > td,
+#div_cuerpo table tr.no_leidos:hover > td{background-color:#dbe7ff;cursor:default}

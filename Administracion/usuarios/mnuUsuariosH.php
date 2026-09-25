@@ -26,8 +26,11 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-if($_SESSION["usua_admin_sistema"]!=1){
-    if($_SESSION["usua_perm_ciudadano"]!=1) {
+// En modo solicitud (alta de ciudadano desde la búsqueda de destinatarios, RQT-7)
+// la página que incluye este archivo ya validó al usuario y no dibuja el menú
+// principal, así que no se exige el permiso 16 aquí.
+if (empty($modo_solicitud) && ($_SESSION["usua_admin_sistema"] ?? 0) != 1){
+    if(($_SESSION["usua_perm_ciudadano"] ?? 0) != 1) {
         die(html_error("Lo sentimos, usted no tiene permisos suficientes para acceder a esta p&aacute;gina."));
     }
 }
@@ -142,6 +145,9 @@ function print_tabs_external_user() {
     $isAdmin = isset($_SESSION["usua_admin_sistema"]) && $_SESSION["usua_admin_sistema"] == 1;
     $isCitizen = isset($_SESSION["usua_perm_ciudadano"]) && $_SESSION["usua_perm_ciudadano"] == 1;
 
+    // Modo solicitud (RQT-7): la página ya validó al usuario; sin permiso 16 no se
+    // dibuja el menú (sus opciones exigen ese permiso) pero tampoco se bloquea.
+    if (!$isAdmin && !$isCitizen && !empty($GLOBALS['modo_solicitud'])) return '';
     if (!$isAdmin && !$isCitizen) {
         die(html_error("Lo sentimos, usted no tiene permisos suficientes para acceder a esta p&aacute;gina."));
     }
@@ -182,10 +188,18 @@ function print_tabs_external_user() {
         $html .= html_writer::end_tag('a');
     }
 
-    $html .= html_writer::start_tag('a', array('href'=>'../ciudadanos_solicitud/cuerpoSolicitud_ext.php', 'class' => 'menu-item', 'title' => 'Solicitudes usuario externo'));
+    $html .= html_writer::start_tag('a', array('href'=>'../ciudadanos_solicitud/cuerpoSolicitud_ext.php', 'class' => 'menu-item', 'title' => 'Solicitudes de firma electrónica de ciudadanos'));
     $html .= html_writer::tag('div', '<i class="fa-solid fa-file-lines"></i>', array('class' => 'menu-btn'));
     $html .= html_writer::tag('span', 'Solicitudes', array('class' => 'menu-label'));
     $html .= html_writer::end_tag('a');
+
+    // Solicitudes de alta de ciudadanos desde la búsqueda de destinatarios (RQT-7)
+    if(($_SESSION["perm_aprobar_ciudadano"] ?? 0)==1 || ($_SESSION["usua_admin_sistema"] ?? 0)==1) {
+        $html .= html_writer::start_tag('a', array('href'=>'../ciudadanos_solicitud/aprobacion_ciudadanos.php', 'class' => 'menu-item', 'title' => 'Aprobar solicitudes de nuevos ciudadanos'));
+        $html .= html_writer::tag('div', '<i class="fa-solid fa-user-clock"></i>', array('class' => 'menu-btn'));
+        $html .= html_writer::tag('span', 'Aprobaciones', array('class' => 'menu-label'));
+        $html .= html_writer::end_tag('a');
+    }
 
     $html .= html_writer::end_tag('div');
     $html .= html_writer::end_tag('nav');

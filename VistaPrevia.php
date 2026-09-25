@@ -35,8 +35,7 @@
     $archivo= limpiar_sql($_GET['archivo']);
     $textrad = limpiar_sql($_GET['textrad']);
 
-    include(__DIR__.'/plantillas/generar_documento.php');
-    include(__DIR__.'/plantillas/GenerarDocumento.php');
+    include(__DIR__.'/plantillas/generar_documento.php'); // aquí se define la clase GenerarDocumento
     $doc = New GenerarDocumento($db);
     /*if (trim($archivo)=="")
         $archivo = $doc->GenerarPDF($verrad,"no");
@@ -45,13 +44,19 @@
     */
     if (trim($archivo)==""){
         $archivo = $doc->GenerarPDF($verrad,"no");
-       
-        if ($archivo=='')
-        $archivo = GenerarPDF($verrad,"no",".");
-        $archivo = str_replace(".p7m","",$archivo);        
+
+        // Si el servicio de PDF no devolvió nada se informa el motivo; antes se llamaba aquí a una
+        // función GenerarPDF() inexistente, lo que provocaba un error fatal y un mensaje genérico.
+        if (trim($archivo)=="") {
+            die("<!DOCTYPE html><meta charset='UTF-8'>
+                 <div style='font-family: sans-serif; padding: 15px;'>
+                    No se pudo generar el PDF del documento <b>".htmlspecialchars($textrad ?? "")."</b>.<br><br>
+                    Verifique que el servicio de generación de PDF est&eacute; disponible.
+                    Si el problema persiste, informe a la DTIC indicando el n&uacute;mero del documento.
+                 </div>");
+        }
     }
-    else
-        $archivo = str_replace(".p7m","",$archivo);
+    $archivo = str_replace(".p7m","",$archivo);
     if (!$nombre_archivo) {
         $tmp = explode("/",$archivo);
         $nombre_archivo = $tmp[count($tmp)-1];

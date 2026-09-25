@@ -113,7 +113,7 @@ $paginador = new ADODB_Pager_Ajax(dirname(__DIR__, 2), "div_buscar_usuarios", "b
             
             $sql="select depe_nomb, depe_codi from dependencia where depe_estado=1 
                 and inst_codi=".$_SESSION["inst_codi"];
-            if ($depe_codi_admin!=0)
+            if (!empty($depe_codi_admin))
             $sql.=" and depe_codi in ($depe_codi_admin)";            
             $sql.=" order by 1 asc";
             //$sql="select depe_nomb, depe_codi from dependencia where depe_estado=1 and inst_codi=".$_SESSION["inst_codi"]." order by 1 asc";

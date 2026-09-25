@@ -263,6 +263,45 @@ function borrarInformado($radicados, $usua_codi, $observa)
 
 
 
+/**
+ * Devuelve la subrogación vigente del destinatario de una entrega, o null.
+ *
+ * Se consulta en el momento de entregar el documento —no al activar la
+ * subrogación— porque los documentos que llegan durante el período deben
+ * desviarse uno a uno, no en un traspaso masivo inicial.
+ */
+function contextoSubrogacionDestino($usua_dest)
+{
+    if ((int)$usua_dest <= 0) return null;
+    include_once(dirname(__DIR__) . '/subrogacion/Subrogacion.php');
+    $subrogacion = new Subrogacion($this->db);
+    return $subrogacion->vigenteParaSubrogado($usua_dest);
+}
+
+/**
+ * Marca un documento como recibido durante una subrogación.
+ *
+ * El documento NO se desvía: queda en la bandeja del puesto, a nombre del
+ * titular. El subrogante lo tramita cambiando al contexto del cargo en el menú
+ * "Usuario:", con lo que el trámite consta a nombre del puesto —que es lo
+ * correcto documentalmente— y la persona real queda registrada en
+ * subrogacion_auditoria a través del hook de Historico::insertarHistorico().
+ *
+ * El sello sólo sirve para identificar después qué documentos entraron al
+ * puesto mientras estaba subrogado.
+ *
+ * @param $ctx fila devuelta por contextoSubrogacionDestino()
+ */
+function aplicarCopiaSubrogacion($radi_nume_radi, $ctx)
+{
+    if (!$ctx) return;
+
+    include_once(dirname(__DIR__) . '/subrogacion/Subrogacion.php');
+    $subrogacion = new Subrogacion($this->db);
+    $subrogacion->sellarDocumento($radi_nume_radi,
+        (int)$ctx['USUA_SUBROGACION_CODI'], Subrogacion::DOC_TRAMITABLE);
+}
+
 function reasignar( $radicados, $usua_codi, $usua_dest, $observa, $fecha_tramite="", $flag_administrador=false, $carpeta=0)
 {
     // La guarda comparaba contra la cadena "0", asi que un usCodSelect vacio ("") la
@@ -272,6 +311,11 @@ function reasignar( $radicados, $usua_codi, $usua_dest, $observa, $fecha_tramite
     include_once(dirname(__DIR__,2).'/obtenerdatos.php');		//Consulta de datos de los usuarios y radicados
 
     $mail_param["enviado_por"] = "Reasignado por:";
+    // Quien recibe el documento debe enterarse por el correo de qué se le pide y
+    // con qué comentario, sin tener que entrar al sistema a buscarlo.
+    include_once(dirname(__DIR__).'/sumillas/Sumillas.php');
+    $mail_param["sumillas"]   = sumillas_texto_seleccion($this->db);
+    $mail_param["comentario"] = $observa;
     $flag_bandeja_compartida = false; //en caso de que la reasignación sea por bandeja compartida
     $codTx = 9;
 
@@ -524,6 +568,7 @@ function cambioEstadoDocumentoGenerado($radicados)
                 $lista_destinatarios = $rs->fields["RADI_USUA_DEST"];
                 $redirigido = 0+$rs->fields["RADI_USUA_REDIRIGIDO"];
                 while (!$rs->EOF) {
+                    $ctxSubrogacion = null;
                     if (substr($rs->fields["RADI_NUME_RADI"],-1) == "1") {
                         $destino = str_replace("-", "", $rs->fields["RADI_USUA_DEST"]);
                         $estado = 2;
@@ -538,6 +583,10 @@ function cambioEstadoDocumentoGenerado($radicados)
                         //$this->enviarMail($_SESSION["usua_codi"], $destino, $rs->fields["RADI_NUME_RADI"]);
                         $remitente = str_replace("-", "", $rs->fields["RADI_USUA_REM"]);
                         $this->enviarMail($remitente, $destino, $rs->fields["RADI_NUME_RADI"], "Documento Recibido");
+
+                        // El documento se queda en el puesto; sólo se marca para
+                        // saber que entró durante una subrogación.
+                        $ctxSubrogacion = $this->contextoSubrogacionDestino($destino);
                     } else { // Estado del documento padre
                         $destino = $rs->fields["RADI_USUA_ACTU"];
                         $estado = 6;
@@ -545,6 +594,9 @@ function cambioEstadoDocumentoGenerado($radicados)
                     // Cambiamos el estado y el usuario actual
                     $sql = "update radicado set esta_codi=$estado, radi_usua_actu=$destino where radi_nume_radi=".$rs->fields["RADI_NUME_RADI"];
                     $this->db->conn->Execute($sql);
+
+                    $this->aplicarCopiaSubrogacion($rs->fields["RADI_NUME_RADI"], $ctxSubrogacion);
+
                     $rs->MoveNext();
                 }
             } // fin documentos externos
@@ -1160,6 +1212,11 @@ function envioElectronicoDocumento($radi_nume, $usua_codi) {
 
     while ($rs && !$rs->EOF) {
         $usr_destino = $rs->fields["USUA_CODI"];
+
+        // El documento se queda en el puesto; sólo se marca para saber que entró
+        // durante una subrogación.
+        $ctxSubrogacion = $this->contextoSubrogacionDestino($usr_destino);
+
         $sql = "update radicado set esta_codi=$estado, radi_usua_actu=$usr_destino";
         if ($rs_usr->fields["INST_CODI"] != $rs->fields["INST_CODI"]) {
             // Validamos para cuando se envien documentos a 2 funcionarios de otra institucion no se generen 2 codigos
@@ -1173,6 +1230,8 @@ function envioElectronicoDocumento($radi_nume, $usua_codi) {
         }
         $sql .= " where radi_nume_radi=".$rs->fields["RADI_NUME_RADI"];
         $this->db->conn->Execute($sql);
+
+        $this->aplicarCopiaSubrogacion($rs->fields["RADI_NUME_RADI"], $ctxSubrogacion);
 
         // Registramos el histórico
         $this->insertarHistorico($rs->fields["RADI_NUME_RADI"], $usua_codi, $usua_codi, "Documento Firmado Electrónicamente", 40);	//Firma Digital
@@ -1241,8 +1300,14 @@ function envioManualDocumento($radicados, $observa)
                 if (trim((string)($rs->fields["USUA_CODI"] ?? '')) === '')
                     error_log("QUIPUX envioManualDocumento: destinatario no resuelto para el documento $radi_nume (radi_usua_dest=".($rs->fields["RADI_USUA_DEST"] ?? '').")");
 
-                if ($rs->fields["INST_CODI"]==$_SESSION["inst_codi"] and $rs->fields["USUA_ESTA"]==1)
-                    $cadena = "esta_codi=2, radi_usua_actu=".$rs->fields["USUA_CODI"];
+                $ctxSubrogacion = null;
+                if ($rs->fields["INST_CODI"]==$_SESSION["inst_codi"] and $rs->fields["USUA_ESTA"]==1) {
+                    // El documento se queda en el puesto; sólo se marca para
+                    // saber que entró durante una subrogación.
+                    $usr_destino = $rs->fields["USUA_CODI"];
+                    $ctxSubrogacion = $this->contextoSubrogacionDestino($usr_destino);
+                    $cadena = "esta_codi=2, radi_usua_actu=".$usr_destino;
+                }
                 else
                     $cadena = "esta_codi=6";
                 $sql = "update radicado set $cadena, radi_nomb_usua_firma=null, radi_fech_firma=null, radi_leido=0 where radi_nume_radi=$radi_nume";
@@ -1250,6 +1315,8 @@ function envioManualDocumento($radicados, $observa)
                     error_log("QUIPUX envioManualDocumento: no se pudo enviar el documento $radi_nume. ".$this->db->conn->ErrorMsg());
                     continue;
                 }
+
+                $this->aplicarCopiaSubrogacion($radi_nume, $ctxSubrogacion);
 
                 $this->insertarHistorico($radi_nume, $_SESSION["usua_codi"], $_SESSION["usua_codi"], $observa, 19);
                 $cadena = $observa . "Envío manual del documento al usuario ".$rs->fields["USUA_NOMBRE"];
@@ -1444,7 +1511,7 @@ function enviarDocumentoElectronicoCiudadano ($radicados, $observa) {
         $this->insertarHistorico($rs->fields["RADI_NUME_RADI"], $_SESSION["usua_codi"], $_SESSION["usua_codi"], $comentario, 51, $tarea_codi);
         $mail_param["tarea_codi"] = $tarea_codi;
         $mail_param["comentario"] = $comentario;
-        $mail_param["fecha_maxima"] = substr($rs->fields["FECHA_MAXIMA"],0,10);
+        $mail_param["fecha_maxima"] = substr($rs->fields["FECHA_MAXIMA"],0,16);
         $this->enviarMail($_SESSION["usua_codi"], $rs->fields["USUA_CODI_ORI"], $rs->fields["RADI_NUME_RADI"], "Tarea Finalizada", "51", $mail_param);
 
         // Reasignar respuestas
@@ -1492,7 +1559,7 @@ function enviarDocumentoElectronicoCiudadano ($radicados, $observa) {
         $this->insertarHistorico($rs->fields["RADI_NUME_RADI"], $_SESSION["usua_codi"], $_SESSION["usua_codi"], $comentario, 52, $tarea_codi);
         $mail_param["tarea_codi"] = $tarea_codi;
         $mail_param["comentario"] = $comentario;
-        $mail_param["fecha_maxima"] = substr($rs->fields["FECHA_MAXIMA"],0,10);
+        $mail_param["fecha_maxima"] = substr($rs->fields["FECHA_MAXIMA"],0,16);
         $this->enviarMail($_SESSION["usua_codi"], $rs->fields["USUA_CODI_DEST"], $rs->fields["RADI_NUME_RADI"], "Tarea Cancelada", "52", $mail_param);
     }
     return $mensaje;
@@ -1583,13 +1650,13 @@ function buscarFechaTareaHija($tarea_codi,$fecha_maxima_tram,$tipo){
     //echo $sql;
     $rs=$this->db->conn->query($sql);
     while(!$rs->EOF){
-        $fechaMaxima=substr($rs->fields['FECHA_MAXIMA'],0,10);
+        $fechaMaxima=substr($rs->fields['FECHA_MAXIMA'],0,16);
         if($fechaMaxima<$fechaMaximaNext)
             $fechaFinal=$fechaMaximaNext;
         else 
              $fechaFinal=$fechaMaxima;       
             
-            $fechaMaximaNext=substr($rs->fields['FECHA_MAXIMA'],0,10);
+            $fechaMaximaNext=substr($rs->fields['FECHA_MAXIMA'],0,16);
             $rs->MoveNext();
     }
     if ($tipo==1){        
@@ -1978,12 +2045,40 @@ function buscarFechaTareaHija($tarea_codi,$fecha_maxima_tram,$tipo){
     * @param string $desc texto contenido del mail.
     * @return confirmación.
     */
+    /**
+     * Filas de "Sumilla" y "Comentario" del correo de reasignación.
+     *
+     * Se emiten sólo si vienen con contenido, para no dejar filas vacías en las
+     * transacciones que no llevan sumilla ni comentario.
+     *
+     * @param  array $parametros claves "sumillas" y "comentario"
+     * @return string filas <tr> listas para insertar en la tabla del correo
+     */
+    function filasSumillaComentario($parametros)
+    {
+        $filas    = "";
+        $sumillas = trim($parametros["sumillas"] ?? "");
+        $comenta  = trim($parametros["comentario"] ?? "");
+
+        if ($sumillas != "")
+            $filas .= "<tr><td valign='top'><b>Sumilla:</b></td><td>".htmlspecialchars($sumillas)."</td></tr>";
+
+        if ($comenta != "")
+            $filas .= "<tr><td valign='top'><b>Comentario:</b></td><td>"
+                    . nl2br(htmlspecialchars($comenta))."</td></tr>";
+
+        return $filas;
+    }
+
     function enviarMail($remitente, $destinatario, $radi_nume, $nombre_accion="", $accion="0", $parametros = array())
     {
         if ($remitente == $destinatario) return;
         $ruta_raiz = $this->db->rutaRaiz;
         include(dirname(__DIR__,2).'/config.php');
         include_once(dirname(__DIR__,2).'/obtenerdatos.php');		//Consulta de datos de los usuarios y radicados
+        // Puente del entorno local de desarrollo. /local/ está en .gitignore y no se
+        // despliega, así que en producción esto no existe y el envío sigue por mail().
+        if (is_file(dirname(__DIR__,2).'/local/mail/Mailer.php')) include_once(dirname(__DIR__,2).'/local/mail/Mailer.php');
 
         if (ObtenerPermisoUsuario($destinatario, 21, $this->db) == 0) return;
         $dest = ObtenerDatosUsuario ($destinatario, $this->db);
@@ -2018,7 +2113,9 @@ function buscarFechaTareaHija($tarea_codi,$fecha_maxima_tram,$tipo){
                     $mail_body .= "<tr><td><b>No. de Documento:</b></td><td>".$radicado["radi_nume_text"]."</td></tr>";
                     $mail_body .= "<tr><td valign='top'><b>Asunto:</b></td><td>".$radicado["radi_asunto"]."</td></tr>";
                     $mail_body .= "<tr><td valign='top'><b>".$parametros["enviado_por"]."</b></td><td>".$rem["abr_titulo"] . " " . $rem["nombre"] .
-                                  "<br>" . $rem["cargo"] . "<br>" . $rem["institucion"]."</td></tr></table>";
+                                  "<br>" . $rem["cargo"] . "<br>" . $rem["institucion"]."</td></tr>";
+                    $mail_body .= $this->filasSumillaComentario($parametros);
+                    $mail_body .= "</table>";
                          // "<br><a href='mailto:" . $rem["email"]. "'>" . $rem["email"]. "</a></td></tr></table>";
                     break;
                 case '9':
@@ -2031,7 +2128,9 @@ function buscarFechaTareaHija($tarea_codi,$fecha_maxima_tram,$tipo){
                     $mail_body .= "<br><br><table border='0' width='100%'><tr><td width='30%'><b>Fecha:</b></td><td width='70%'>".date("Y-m-d H:i:s")."</td></tr>";
                     $mail_body .= "<tr><td><b>No. de Documentos:</b></td><td>".$parametros["num_docs"]."</td></tr>";
                     $mail_body .= "<tr><td valign='top'><b>".$parametros["enviado_por"]."</b></td><td>".$rem["abr_titulo"] . " " . $rem["nombre"] .
-                                  "<br>" . $rem["cargo"] . "<br>" . $rem["institucion"]."</td></tr></table>";
+                                  "<br>" . $rem["cargo"] . "<br>" . $rem["institucion"]."</td></tr>";
+                    $mail_body .= $this->filasSumillaComentario($parametros);
+                    $mail_body .= "</table>";
                          // "<br><a href='mailto:" . $rem["email"]. "'>" . $rem["email"]. "</a></td></tr></table>";
                     break;
                 case '1': // Envio de mail para el Jefe de área cuando un documento de su bandeja de recibidos ha sido tomado.
@@ -2176,17 +2275,20 @@ function buscarFechaTareaHija($tarea_codi,$fecha_maxima_tram,$tipo){
 
             $tmp = explode(",", $dest["email"]);
             foreach ($tmp as $destinatario) {
-
-                $header  = 'MIME-Version: 1.0' . "\r\n";
-                $header .= 'Content-type: text/html; charset=UTF-8' . "\r\n";
-                //$header .= "To: ".$dest["titulo"] . " " . $dest["nombre"] . " <" . $destinatario . ">" . "\r\n";
-                $header .= "From: Quipux <$cuenta_mail_envio>" . "\r\n";
-
-                $email = $destinatario; //recipient
+                $email = trim($destinatario); //recipient
                 $subject = "Quipux: $nombre_accion $asunto"; //asunto
 //echo "$subject<br>$mail_body<hr>";
-                ini_set('sendmail_from', "$cuenta_mail_envio");
-                mail($email, $subject, $mail_body, $header);
+                if (function_exists('quipux_enviar_correo')) {
+                    quipux_enviar_correo($email, $subject, $mail_body, $dest["nombre"], $cuenta_mail_envio);
+                } else {
+                    $header  = 'MIME-Version: 1.0' . "\r\n";
+                    $header .= 'Content-type: text/html; charset=UTF-8' . "\r\n";
+                    //$header .= "To: ".$dest["titulo"] . " " . $dest["nombre"] . " <" . $destinatario . ">" . "\r\n";
+                    $header .= "From: Quipux <$cuenta_mail_envio>" . "\r\n";
+
+                    ini_set('sendmail_from', "$cuenta_mail_envio");
+                    mail($email, $subject, $mail_body, $header);
+                }
             }
 //            echo "<br/><span><font color='Navy'><b>El destinatario ha sido notificado a su cuenta de correo electr&oacute;nico.</b></font></span><br/>";
         }

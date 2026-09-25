@@ -47,7 +47,7 @@
       $sql .= " and u.depe_codi=" . (0 + $_POST["area"]);
   else{
       $depe_codi_admin = obtenerAreasAdmin($_SESSION["usua_codi"],$_SESSION["inst_codi"],$_SESSION["usua_admin_sistema"],$db);
-      if ($depe_codi_admin!=0)
+      if (!empty($depe_codi_admin))
       $sql .= " and u.depe_codi in ($depe_codi_admin)";
   }
   if ((0 + $_POST["estado"]) != 2) 

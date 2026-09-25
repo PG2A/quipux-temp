@@ -49,6 +49,19 @@ function visibilidad_dependencias($depe, $db, $i=0) {
 }
 
 
+/**
+ * Destinatarios (Para/Copia) que son ciudadanos pendientes de aprobación (RQT-7).
+ * Devuelve la línea de error para $mensaje_error, o "" si no hay ninguno.
+ */
+function mensaje_destinatarios_pendientes($radicado, $db) {
+    include_once(__DIR__.'/include/ciudadanos/SolicitudCiudadano.php');
+    $codigos = SolicitudCiudadano::codigosDeCadena(($radicado["usua_dest"] ?? '') . ($radicado["cca"] ?? ''));
+    $pendientes = SolicitudCiudadano::pendientesEntre($db, $codigos);
+    if (!$pendientes) return "";
+    return "- ".$radicado["radi_nume_text"].". El ciudadano ".implode(", ", $pendientes)
+         ." est&aacute; pendiente de aprobaci&oacute;n; el documento no puede enviarse hasta que se apruebe la solicitud.<br>";
+}
+
 function validar_transacciones($tx, $radi_nume, $db) {
     $mensaje_error = "";
     $radicado = ObtenerDatosRadicado($radi_nume,$db);
@@ -83,6 +96,7 @@ function validar_transacciones($tx, $radi_nume, $db) {
             $rs=$db->query("select usua_esta, usua_nombre from usuario where usua_codi in (".str_replace("-", "", $radicado["usua_dest"]).")");
             if ($rs->fields["USUA_ESTA"] != "1")
                 $mensaje_error .= "- ".$radicado["radi_nume_text"].". El usuario ".$rs->fields["USUA_NOMBRE"]." se encuentra deshabilitado en el sistema.<br>";
+            $mensaje_error .= mensaje_destinatarios_pendientes($radicado, $db);
             break;
 
         case 4: // Envío electrónico
@@ -144,6 +158,8 @@ function validar_transacciones($tx, $radi_nume, $db) {
             $rs=$db->query("select usua_nombre from usuario where usua_esta=0 and usua_codi in ($usr_dest)");
             if (!$rs->EOF)
                 $mensaje_error .= "- ".$radicado["radi_nume_text"].". El usuario ". $rs->fields["USUA_NOMBRE"] . " se encuentra desactivado.<br>";
+            // Ciudadanos pendientes de aprobación (RQT-7): el documento no sale hasta que se resuelvan
+            $mensaje_error .= mensaje_destinatarios_pendientes($radicado, $db);
             if ($radicado["radi_tipo"] == "2") {
                 $rs=$db->query("select usua_codi from usuarios where usua_esta=1 and usua_codi in ($usr_dest)");
                 if ($rs->EOF)

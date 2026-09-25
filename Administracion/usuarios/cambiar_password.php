@@ -32,16 +32,24 @@ if (isset($_GET["krd"]) && isset($_GET["code"])) {
     $flag = false;
     include_once(dirname(__DIR__, 2).'/include/db/ConnectionHandler.php');
     include_once(dirname(__DIR__, 2).'/funciones.php');
+    include_once(dirname(__DIR__, 2).'/funciones_interfaz.php');
     $db = new ConnectionHandler(dirname(__DIR__, 2));
     $krd = limpiar_sql(base64_decode($_GET["krd"]));
     $contraold = base64_decode($_GET["code"]);
-    $sql = "select usua_pasw from usuario where USUA_LOGIN = upper('$krd')";
+    // Si el mismo login tiene cuenta de funcionario y de ciudadano, la clave
+    // temporal del enlace es la misma en ambas (cambiar_password_mail.php las
+    // actualiza por cédula), así que basta con la primera.
+    $sql = "select usua_pasw from usuario where USUA_LOGIN = upper('$krd') and usua_esta = 1 order by tipo_usuario asc";
     $rs = $db->query($sql);
-    if ($rs->EOF) {
+    if (!$rs || $rs->EOF) {
         echo html_error("Su usuario no fue encontrado. Por favor comun&iacute;quese con su administrador del sistema.");
         die ("");
     }
-    if (substr(md5($contraold),1,26) != $rs->fields["USUA_PASW"]) {
+    // La clave temporal se guarda como md5 completo (32); las cuentas antiguas
+    // pueden tener el hash recortado a 26 o el recortado con el desfase heredado.
+    $md5_code = md5($contraold);
+    $hash_db = (string)$rs->fields["USUA_PASW"];
+    if ($hash_db !== $md5_code && $hash_db !== substr($md5_code, 0, 26) && $hash_db !== substr($md5_code, 1, 26)) {
         echo html_error("Su contrase&ntilde;a ya fue cambiada. Por favor comun&iacute;quese con su administrador del sistema.");
         die ("");
     }
@@ -51,7 +59,9 @@ if (isset($_GET["krd"]) && isset($_GET["code"])) {
     session_start();
     include_once(dirname(__DIR__, 2).'/rec_session.php');
     $krd = $_SESSION["krd"];
-    $accion_cancelar="history.back()";//window.location='$ruta_raiz/cuerpo.php?carpeta=81&adodb_next_page=1'";
+    // Primer ingreso de un ciudadano con su clave inicial: no hay a dónde regresar
+    $forzar = !empty($_SESSION["forzar_cambio_clave"]);
+    $accion_cancelar = $forzar ? "window.location='../../cerrar_session.php'" : "history.back()";
 }
 ?>
 
@@ -163,6 +173,9 @@ if (isset($_GET["krd"]) && isset($_GET["code"])) {
                 <tr>
                     <td align="center">
                         <h3>Por favor ingrese los siguientes datos</h3>
+                        <?php if (!empty($forzar)) { ?>
+                        <p style="color:#b00; font-weight:bold;">Est&aacute; ingresando con su contrase&ntilde;a inicial. Por seguridad debe definir una nueva contrase&ntilde;a para continuar.</p>
+                        <?php } ?>
                     </td>
                 </tr>
                 <tr>
@@ -208,7 +221,7 @@ if (isset($_GET["krd"]) && isset($_GET["code"])) {
                         <br /><br />
                         <input type='button' value='Aceptar' class='botones' name='btn_aceptar' onClick='validar_formulario();'>
                         &nbsp;&nbsp;&nbsp;&nbsp;
-                        <input type='button' value='Regresar' class='botones' name='btn_cancelar' onClick="<?=$accion_cancelar?>">
+                        <input type='button' value='<?=!empty($forzar) ? "Cerrar sesi&oacute;n" : "Regresar"?>' class='botones' name='btn_cancelar' onClick="<?=$accion_cancelar?>">
                     </td>
                 </tr>
                 <tr>

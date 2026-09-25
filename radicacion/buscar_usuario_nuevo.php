@@ -58,6 +58,11 @@ $documento_us2 = $_GET['documento_us2'] ?? $_POST['documento_us2'] ?? '';
 $concopiaa = $_GET['concopiaa'] ?? $_POST['concopiaa'] ?? '';
 $radi_lista_dest = $_GET['radi_lista_dest'] ?? $_POST['radi_lista_dest'] ?? '';
 $radi_lista_nombre = $_GET['radi_lista_nombre'] ?? $_POST['radi_lista_nombre'] ?? '';
+// Documento desde el que se abrió el popup (vacío si aún no se guardó): la
+// solicitud de ciudadano nuevo queda vinculada a él.
+$nurad = preg_replace('/\D/', '', (string)($_GET['nurad'] ?? $_POST['nurad'] ?? ''));
+// Permiso 16 (Creación de Ciudadanos) o administrador: crea directo; el resto solicita.
+$crea_directo = (($_SESSION["usua_perm_ciudadano"] ?? 0) == 1 or ($_SESSION["usua_admin_sistema"] ?? 0) == 1);
 ?>
 
 <script type="text/JavaScript">
@@ -164,6 +169,18 @@ function pasar(cod_usr, tipo, flag_lista)
     return band_usr1 && band_usr2 && band_cca;
 }
 
+// Documento de periodo jerárquico: la regla que permite este "Para" exige copia
+// al jefe o al nivel intermedio, así que se agregan también como "Copia a".
+function pasar_con_copia(cod_usr, copias, nombres)
+{
+    pasar(cod_usr, 1, true);
+    var lista = copias.split(',');
+    for (var i = 0; i < lista.length; i++)
+        if (lista[i] != '') pasar(lista[i], 3, true);
+    alert('Documento de periodo jerárquico: para enviarlo a este destinatario se agregó en copia a:\n' + nombres);
+    ver_de_para();
+}
+
 // Pone los usuarios de una lista como destinatarios o como copia
 function pasar_lista(tipo) {
     var codUsr = new Array();
@@ -256,17 +273,49 @@ function borrarTodos(tipo)
 
 function crear_ciudadano(usuario)
 {
-    accion = '&accion=1';
+    // Sin código: alta de un ciudadano nuevo. Con permiso 16 (Creación de
+    // Ciudadanos) o administrador se crea directo y activo; el resto registra una
+    // SOLICITUD que un aprobador debe autorizar. En ambos casos el ciudadano vuelve
+    // a esta ventana como destinatario (en el segundo, "pendiente de aprobación").
+    accion = '&accion=1<?=$crea_directo ? "" : "&modo=solicitud"?>&nurad=<?=$nurad?>&ent=<?=$ent?>';
     if ((usuario||'0')!='0')
         accion = '&accion=2&ciu_codigo='+usuario;
     var x = (screen.width - 1100) / 2;
     var y = (screen.height - 550) / 2;
-    windowprops = "top=0,left=0,location=no,status=no, menubar=no,scrollbars=yes, resizable=yes,width=1100,height=550";
-    url = '../Administracion/ciudadanos/adm_usuario_ext.php?cod_impresion=1cerrar=Si'+accion;
+    windowprops = "top=0,left=0,location=no,status=no, menubar=no,scrollbars=yes, resizable=yes,width=1100,height=600";
+    url = '../Administracion/ciudadanos/adm_usuario_ext.php?cod_impresion=1&cerrar=Si'+accion;
     preview = window.open(url , "Crear_Usuario_Externo", windowprops);
     preview.moveTo(x, y);
     preview.focus();
     return;
+}
+
+// Llamada desde la ventana de solicitud al terminar: agrega al ciudadano pendiente
+// como Para (1) o Copia (3) y refresca la lista.
+function agregar_ciudadano_solicitado(cod_usr, tipo)
+{
+    pasar(cod_usr, tipo, false);
+    return;
+}
+
+// Cancela la solicitud de alta de un ciudadano pendiente (sólo quien la hizo):
+// desactiva al ciudadano en el servidor y lo quita del documento.
+function cancelar_solicitud_ciudadano(cod_usr, tipo)
+{
+    if (!confirm("¿Cancelar la solicitud de alta de este ciudadano? Se retirará del documento.")) return;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', 'solicitud_ciudadano_cancelar.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState != 4) return;
+        var resp = (xhr.responseText || '').replace(/^\s+|\s+$/g, '');
+        if (xhr.status == 200 && resp == 'OK') {
+            borrarCCA(cod_usr, tipo);
+        } else {
+            alert(resp != '' ? resp : 'No se pudo cancelar la solicitud.');
+        }
+    };
+    xhr.send('ciu_codigo=' + encodeURIComponent(cod_usr));
 }
 
 function buscar_ciudadano()
@@ -340,7 +389,10 @@ function buscar_resultado(desde){
                 "&buscar_nom=" + document.formu1.buscar_nom.value +
 //                "&buscar_car=" + document.formu1.buscar_car.value +
                 "&buscar_inst=" + document.formu1.buscar_inst.value +
-                "&buscar_depe=" + document.formu1.buscar_depe.value;
+                "&buscar_depe=" + document.formu1.buscar_depe.value +
+                // Para aplicar las reglas de periodo jerárquico al botón "Para"
+                "&nurad=<?=$nurad?>" +
+                "&de=" + document.formu1.documento_us2.value;
             //comento cuando se selecciona una persona teniendo listas,las listas pone en blanco
             //comentado funciona
     //if(document.formu1.lista_usr.value==0)
@@ -619,9 +671,15 @@ echo '<input type="hidden" name="hidden_lista_modificada" id="hidden_lista_modif
 <table width=100% border="0" align="center" name='tbl_botones' id='tbl_botones' cellspacing="1" cellpadding="4">
     <tr>
     <td width="25%">&nbsp;</td>
-	<?php if ($_SESSION["usua_perm_ciudadano"]==1 or $_SESSION["usua_admin_sistema"]==1) { ?> <!--Cambio para desadocs VJ-->
-	    <td id="td_ciudad"  style='display:none'><center><input type='button' value="Crear Ciudadano" class="botones_largo" onclick='crear_ciudadano()'></center></td>
-	<?php } ?> <!--Cambio para desadocs VJ-->
+	<?php // Con permiso 16 o administrador: "Crear Ciudadano" (directo). Cualquier otro
+	      // funcionario que redacta documentos: "Solicitar Ciudadano" (queda pendiente
+	      // hasta que lo apruebe quien tenga perm_aprobar_ciudadano). Los ciudadanos no.
+	      if ($_SESSION["tipo_usuario"]!=2 and ($crea_directo or ($_SESSION["usua_prad_tp1"] ?? 0)==1)) { ?>
+	    <td id="td_ciudad"  style='display:none'><center><input type='button'
+	        value="<?=$crea_directo ? "Crear Ciudadano" : "Solicitar Ciudadano"?>" class="botones_largo"
+	        title="<?=$crea_directo ? "Registra un ciudadano nuevo" : "Registra un ciudadano nuevo; queda pendiente de aprobaci&oacute;n"?>"
+	        onclick='crear_ciudadano()'></center></td>
+	<?php } ?>
 	<td height="10%"><center><input type='button' value='Aceptar' class="botones_largo" onclick='pasar_datos()' title="Almacena la información en el documento" ></center></td>
 	<td><center><input type='button' value='Cancelar' class="botones_largo" onclick='accion_cancelar="C"; window.close();'></center></td>
     <td width="25%">&nbsp;</td>

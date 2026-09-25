@@ -28,7 +28,16 @@
 
 session_start();
 require_once(dirname(__DIR__, 2).'/rec_session.php');
-if($_SESSION["usua_admin_sistema"]!=1)
+// modo=solicitud: alta desde la búsqueda de destinatarios (RQT-7). El ciudadano
+// queda pendiente de aprobación, así que basta con poder redactar documentos.
+$modo_solicitud = (($_GET['modo'] ?? $_POST['modo'] ?? '') === 'solicitud');
+if ($modo_solicitud) {
+    if (($_SESSION["tipo_usuario"] ?? 0) == 2 or
+        (($_SESSION["usua_prad_tp1"] ?? 0) != 1 and ($_SESSION["usua_perm_ciudadano"] ?? 0) != 1 and ($_SESSION["usua_admin_sistema"] ?? 0) != 1)) {
+        include(dirname(__DIR__, 2)."/funciones_interfaz.php");
+        die(html_error("Lo sentimos, usted no tiene permisos suficientes para acceder a esta p&aacute;gina."));
+    }
+} elseif($_SESSION["usua_admin_sistema"]!=1)
     if($_SESSION["usua_perm_ciudadano"]!=1)
     {
         include(dirname(__DIR__, 2)."/funciones_interfaz.php");
@@ -38,7 +47,7 @@ require_once(dirname(__DIR__, 2).'/funciones.php');
 include(dirname(__DIR__, 2)."/obtenerdatos.php");
 include(dirname(__DIR__, 2)."/funciones_interfaz.php");
 include_once("util_ciudadano.php");
-include_once("../usuarios/mnuUsuariosH.php");
+include_once("../usuarios/mnuUsuariosH.php"); // en modo solicitud no exige permiso 16 (ver ese archivo)
 
 $ciud = New Ciudadano($db);
 
@@ -82,6 +91,12 @@ $ciu_ciudad =0;
         $accionForm = "adm_usuario_ext_confirmar.php?cerrar=$cerrar&accion=$accion&cod_impresion=$cod_impresion";
         $tituloForm = "Registrar Datos de Ciudadano";
         $ciu_estado = "checked";
+        if ($modo_solicitud) {
+            $sol_nurad = preg_replace('/\D/', '', (string)($_GET['nurad'] ?? ''));
+            $sol_ent   = (int)($_GET['ent'] ?? 0);
+            $accionForm .= "&modo=solicitud&nurad=$sol_nurad&ent=$sol_ent";
+            $tituloForm = "Solicitud de nuevo Ciudadano (requiere aprobaci&oacute;n)";
+        }
     } else {
         if (!isset($recargar)) {
             $sql = "select * from ciudadano where ciu_codigo=$ciu_codigo";
@@ -202,8 +217,17 @@ function ValidarInformacion()
             alert("Por favor seleccione una ciudad de la lista.");
             return false;
         }
+        // Solicitud de alta: el correo es obligatorio porque al aprobarse se le
+        // envían por ahí sus credenciales.
+        if (document.forms[0].modo && document.forms[0].modo.value=='solicitud') {
+            if (trim(document.forms[0].ciu_email.value)=='' || !isEmail(document.forms[0].ciu_email.value)) {
+                alert("Ingrese un Email válido: es necesario para enviarle al ciudadano sus datos de acceso.");
+                document.forms[0].ciu_email.focus();
+                return false;
+            }
+        }
         //si hace checked en cambiar contraseña
-        if(document.forms[0].ciu_password.checked==true){
+        if(document.forms[0].ciu_password && document.forms[0].ciu_password.checked==true){
             if (document.forms[0].ciu_email.value==''){
                 alert("Para cambiar la contraseña, Ingrese el Email");
                 return false;
@@ -267,8 +291,13 @@ function copiar_datos_registro_civil(campo_rc, campo_usr) {
   <form name='frmCrear'  id='frmCrear' action="<?=$accionForm?>" method="post" >
  <input type="hidden" name="usr_codigo" id="usr_codigo" size="40" value='<?=$ciu_codigo?>' />
  <input type="hidden" name="ciu_ciudad" id="ciu_ciudad" size="40" value='<?=$ciu_ciudad?>' />
+ <?php if ($modo_solicitud) { ?>
+ <input type="hidden" name="modo" id="modo" value="solicitud" />
+ <input type="hidden" name="nurad" id="nurad" value="<?=$sol_nurad?>" />
+ <input type="hidden" name="ent" id="ent" value="<?=$sol_ent?>" />
+ <?php } ?>
  <?php 
-  if ($cod_impresion==0)
+  if ($cod_impresion==0 && function_exists("graficarTabsCiud"))
     graficarTabsCiud();?>
     
    <?php echo $ciud->divsInformacionUsrCiud($ciu_cedula);
@@ -280,7 +309,10 @@ function copiar_datos_registro_civil(campo_rc, campo_usr) {
     <div id="div_informacion_ext" name="div_informacion_ext">
         <?php 
         echo "<table width='100%'  class='borde_tab'><tr><td class='listado2'>";
-        echo graficarTabsMenuCiud($usr_codigo,1);
+        // En modo solicitud no se carga mnuUsuariosH.php (exige permiso 16): se
+        // muestra el título en lugar de las pestañas del módulo de ciudadanos.
+        if (function_exists('graficarTabsMenuCiud')) echo graficarTabsMenuCiud($usr_codigo,1);
+        else echo "<span class='titulos4'>$tituloForm</span>";
         echo "</td></tr></table>";
         ?>
     <table width="100%" border="1"  align="center"  name="usr_datos" id="usr_datos">
@@ -373,13 +405,36 @@ function copiar_datos_registro_civil(campo_rc, campo_usr) {
 		<input class="caja_texto" type="text" name="ciu_email" id="ciu_email" value='<?=$ciu_email?>' size="50" maxlength="50" <?=$read?> <?=$deshabilitar_campos?>>
 	    </td>
 	</tr>
+        <?php if ($modo_solicitud) { ?>
+        <tr>
+            <td class="titulos2"> Colocar como: </td>
+            <td class="listado2">
+                <select name="tipo_destinatario" id="tipo_destinatario" class="select">
+                    <option value="1">Para (destinatario)</option>
+                    <option value="3">Copia</option>
+                </select>
+            </td>
+            <td class="titulos2"> Observaci&oacute;n para el aprobador: </td>
+            <td class="listado2">
+                <input class="caja_texto" type="text" name="observacion_solicita" id="observacion_solicita" value="" size="50" maxlength="600">
+            </td>
+        </tr>
+        <tr>
+            <td class="listado2" colspan="4">
+                <font color="#b00"><b>El ciudadano quedar&aacute; pendiente de aprobaci&oacute;n.</b> Podr&aacute; incluirlo en el documento,
+                pero no podr&aacute; enviarlo hasta que un aprobador lo autorice. Al aprobarse, el ciudadano recibir&aacute;
+                por correo su usuario y contrase&ntilde;a inicial.</font>
+            </td>
+        </tr>
+        <?php } else { ?>
         <tr>
 	    <td class="titulos2"> Contrase&ntilde;a: </td>
             <td class="listado2" colspan="3">
                 <input type="checkbox" name="ciu_password" id="ciu_password" value="1" <?php echo $read;?> <?=$deshabilitar_campos?>/> Cambiar contrase&ntilde;a
 	    </td>
-            
+
         </tr>
+        <?php } ?>
         <tr>
         <td class="titulos2">
 		Dirección Principal (Barrio/Número)</td>

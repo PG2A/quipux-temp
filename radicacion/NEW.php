@@ -508,9 +508,8 @@ function grabar_doc(dato)
                         }
                     } catch(e) {}
                     
-                    if (dato == 1) {
-                        window.open('', 'QuipuxPreview', 'top=100,left=100,width=800,height=600,scrollbars=yes,resizable=yes');
-                    } else if (dato == 2 && document.getElementById('hidd_ent') && document.getElementById('hidd_ent').value == '2') {
+                    // dato == 1 (Vista Previa) graba y recarga la página; ya no abre ventana emergente
+                    if (dato == 2 && document.getElementById('hidd_ent') && document.getElementById('hidd_ent').value == '2') {
                         window.open('', 'QuipuxComprobante', 'top=100,left=100,width=800,height=600,scrollbars=yes,resizable=yes');
                     } else if (dato == 2) {
                         quipux_grabando = true;
@@ -584,7 +583,8 @@ function pestanas(valor)
         URL = URL + '?documento_us1=' + document.formulario.documento_us1.value + '&documento_us2=' + document.formulario.documento_us2.value + '&concopiaa=' + document.formulario.concopiaa.value + "&ent=<?=$ent?>"
               + "&radi_lista_dest=" + document.formulario.radi_lista_dest.value
               + "&radi_lista_nombre=" + document.formulario.radi_lista_nombre.value
-              + "&lista_modificada="+document.formulario.hidden_lista_modificada.value;
+              + "&lista_modificada="+document.formulario.hidden_lista_modificada.value
+              + "&nurad=<?=$nurad?>"; // la solicitud de ciudadano nuevo se liga al documento ya guardado
         preview = window.open(URL , "preview", windowprops);
         preview.moveTo(x, y);
         preview.focus();

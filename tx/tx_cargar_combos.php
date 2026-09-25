@@ -124,9 +124,11 @@ $titulo = "";
             if (($_POST["codTx"]==9 or $_POST["codTx"]==30)  and $_SESSION["depe_codi"] != $area)
                 $where = " and (cargo_tipo=1 or usua_codi in (select usua_codi from permiso_usuario where id_permiso=29)) ";
 
-            $sql = "select (usua_apellido || ' ' || usua_nomb)
-                        || ' ' || case when usua_codi in (select usua_subrogado from usuarios_subrogacion where usua_visible=1) = true then '(Subrogado)' else '' end
-                        || ' ' || case when usua_codi in (select usua_subrogante from usuarios_subrogacion where usua_visible=1) = true then '(Subrogante)' else '' end as usua_nombre
+            // Sin las etiquetas "(Subrogado)" / "(Subrogante)" del modelo anterior.
+            // Con el modelo actual la subrogación es un contexto de sesión, no una
+            // cuenta: marcar la cuenta real del subrogante era engañoso, porque
+            // esa cuenta sigue siendo su usuario normal.
+            $sql = "select (usua_apellido || ' ' || usua_nomb) as usua_nombre
                         , usua_codi
                     from usuarios
                     where usua_codi>0 and usua_esta=1 and visible_sub=1 and usua_login not like 'UADM%'

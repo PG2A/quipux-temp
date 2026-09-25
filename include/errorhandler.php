@@ -72,7 +72,7 @@ function quipux_error_handler($errno, $errstr, $errfile, $errline) {
 // Exception Handler
 function quipux_exception_handler($exception) {
     $message = "Uncaught Exception: " . $exception->getMessage() . " in " . $exception->getFile() . " on line " . $exception->getLine() . "\nStack trace: " . $exception->getTraceAsString();
-    
+
     error_log("QUIPUX " . $message);
     quipux_log_archivo($message);
 

@@ -211,7 +211,7 @@ function dibujar_detalle_tarea($db, $tarea_codi, $lista_botones, $ruta_raiz=".",
                         <table width='100%' border='0' cellpadding='0' cellspacing='0' >
                             <tr><td width='30%'><b>Tarea:</b></td><td width='70%'>".$rst->fields["COMENTARIO"]."</td></tr>
                             <tr><td width='30%'><b>Asignado $titulo2:</b></td><td>".$rst->fields["USUA_NOMB"]." ".$rst->fields["USUA_APELLIDO"]."</td></tr>
-                            <tr><td width='30%'><b>Fecha m&aacute;xima de tarea: </b></td><td>".substr($rst->fields["FECHA_MAXIMA"],0,10).$descZonaHoraria."</td></tr>
+                            <tr><td width='30%'><b>Fecha m&aacute;xima de tarea: </b></td><td>".substr($rst->fields["FECHA_MAXIMA"],0,16).$descZonaHoraria."</td></tr>
                         </table>
                     </td>
                     <td width='20%' valign='middle' align='center' valign='middle' onclick='mostrar_historico_tarea(\"".$rst->fields["TAREA_CODI"]."\")'>";

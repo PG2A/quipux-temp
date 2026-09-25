@@ -45,8 +45,20 @@ $sql = "select --Administracion/usuarios/validar_datos_usuario_multiple - usr=".
             , usua_cargo as \"Puesto\"
             , depe_nomb as \"$descDependencia\"
             , inst_nombre as \"$descEmpresa\"
-        from usuario where usua_cedula like '$usr_cedula' and usua_codi<>$usr_codigo
-        order by tipo_usuario asc, inst_codi asc, usua_codi asc";
+            , case when usua_esta = 1
+                   then '<span style=\"display:inline-block;padding:2px 10px;border-radius:10px;background:#e6f4ea;color:#1e7e34;font-weight:600\">Activo</span>'
+                   else '<span style=\"display:inline-block;padding:2px 10px;border-radius:10px;background:#fdecea;color:#c5221f;font-weight:600\">Inactivo</span>'
+              end as \"SCR_Estado\"
+            , coalesce((select case when x.usua_vigencia_desde is null and x.usua_vigencia_hasta is null then 'Sin límite'
+                           else coalesce(to_char(x.usua_vigencia_desde,'YYYY-MM-DD'),'…') || ' a '
+                             || coalesce(to_char(x.usua_vigencia_hasta,'YYYY-MM-DD'),'sin fin') end
+                 from usuarios x where x.usua_codi = usuario.usua_codi), '—') as \"Vigencia\"
+        from usuario
+        -- Las cuentas desactivadas guardan la cédula como 'cedula-usua_codi': se incluyen
+        -- para que se vea su estado.
+        where (usua_cedula like '$usr_cedula' or usua_cedula like '$usr_cedula-%')
+          and usua_codi<>$usr_codigo
+        order by usua_esta desc, tipo_usuario asc, inst_codi asc, usua_codi asc";
 
 $rs = $db->conn->Execute($sql);
 if (!$rs or $rs->EOF) die("");
@@ -61,7 +73,7 @@ $encabezado = $encabezado ?? "";
 $descCarpetasGen = $descCarpetasGen ?? "";
 $descCarpetasPer = $descCarpetasPer ?? "";
 
-echo "<center><blink><img src='$ruta_raiz/iconos/img_alerta_2.gif'>&nbsp;&nbsp;&nbsp;Existen usuarios registrados con el mismo n&uacute;mero de c&eacute;dula.</blink></center>";
+echo "<div style='margin:8px 0 4px;font-weight:600;text-align:left'>Cuentas registradas con esta c&eacute;dula</div>";
 $pager = new ADODB_Pager($db->conn,$sql,'adodb', true,$orderNo,$orderTipo);
 $pager->checkAll = false;
 $pager->checkTitulo = false;

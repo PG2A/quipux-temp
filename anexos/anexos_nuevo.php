@@ -49,6 +49,11 @@ $asocImgRad = (isset($_POST["asocImgRad"])) ? "<input type='hidden' name='asocIm
                 &nbsp;
                 <span id="lbl_archivo_nuevo_<?=$i?>"></span>
                 <span style="position: relative; right: 0px; float: right;">
+                    <a href="javascript:;" class="vinculos" id="lnk_archivo_nuevo_previsualizar_<?=$i?>" title='Ver el archivo antes de grabarlo'
+                       style='display: none;' onclick="fjs_anexos_previsualizar_archivo_nuevo('<?=$i?>')"><img
+                       src='<?=$nombre_servidor?>/iconos/vista_previa.jpg' alt='' border="0"
+                       style='width: 26px; height: 22px; vertical-align: middle;'>&nbsp;Vista previa</a>
+                    &nbsp;&nbsp;
                     <img src='<?=$nombre_servidor?>/iconos/trash.png' id="img_archivo_nuevo_borrar_<?=$i?>" alt='X' title='Eliminar archivo'
                          style='width: 23px; height: 23px; display: none;' onclick="fjs_anexos_borrar_archivo_nuevo('<?=$i?>')">
                     &nbsp;&nbsp;

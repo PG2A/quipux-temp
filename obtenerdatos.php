@@ -600,7 +600,7 @@ function ObtenerDatosOpcImpresionSobre($radiNumeRadi,$usuaCodi,$db){
         $fechaMaximaTarea = date("Y-m-d");
 
         //Consulta si el documento tiene una tarea padre para tomar como fecha maxima de tarea la fecha de la tarea padre.
-        $sqlFechaTarea = "select substr(min(fecha_maxima::text),1,10) as fecha_maxima from tarea where radi_nume_radi in ($listaRadicados) and estado=1 and usua_codi_dest=$codUsario";
+        $sqlFechaTarea = "select substr(min(fecha_maxima::text),1,16) as fecha_maxima from tarea where radi_nume_radi in ($listaRadicados) and estado=1 and usua_codi_dest=$codUsario";
         $rsFechaTarea = $db->query($sqlFechaTarea);
         if($rsFechaTarea->fields["FECHA_MAXIMA"])
             $fechaMaximaTarea = $rsFechaTarea->fields["FECHA_MAXIMA"];
@@ -614,7 +614,7 @@ function ObtenerDatosOpcImpresionSobre($radiNumeRadi,$usuaCodi,$db){
         $fechaMaximaTarea = date("Y-m-d");
 
         //Consulta si el documento tiene una tarea padre para tomar como fecha maxima de tarea la fecha de la tarea padre.
-        $sqlFechaTarea = "select substr(min(fecha_maxima::text),1,10) as fecha_maxima from tarea where radi_nume_radi in ($listaRadicados) and estado=1 and usua_codi_ori=$codUsario";
+        $sqlFechaTarea = "select substr(min(fecha_maxima::text),1,16) as fecha_maxima from tarea where radi_nume_radi in ($listaRadicados) and estado=1 and usua_codi_ori=$codUsario";
         $rsFechaTarea = $db->query($sqlFechaTarea);
         if($rsFechaTarea->fields["FECHA_MAXIMA"])
             $fechaMaximaTarea = $rsFechaTarea->fields["FECHA_MAXIMA"];
@@ -746,21 +746,16 @@ function ObtenerDatosOpcImpresionSobre($radiNumeRadi,$usuaCodi,$db){
          //echo $tipoMensaje;
         return $tipoMensaje;
     }
+    // Lista de usuarios de un área para los combos de reasignar, enviar y asignar
+    // tareas. Ya no decora los nombres con "(Subrogado)" / "(Subrogante)": con el
+    // modelo actual la subrogación es un contexto de sesión y no una cuenta, así
+    // que marcar la cuenta real del subrogante resultaba engañoso.
     function utilSqlSubrogacion($depe_codi){
-        $sql="select 
-             --Subrogado
-               usua_apellido || ' ' || usua_nomb || ' ' ||
-              case when usua_codi in 
-              (select usua_subrogado from usuarios_subrogacion where usua_visible=1) = true then
-              '(Subrogado)' else '' end || ' ' ||
-              --Subrogante
-              case when usua_codi in 
-              (select usua_subrogante from usuarios_subrogacion where usua_visible=1) = true then
-              '(Subrogante)' else '' end as usua_nombre, usua_codi 
-              from usuario where usua_esta=1 
+        $sql="select usua_apellido || ' ' || usua_nomb as usua_nombre, usua_codi
+              from usuario where usua_esta=1
               and usua_login not like 'UADM%'
               and visible_sub=1
-              and depe_codi=".$depe_codi." order by 1";
+              and depe_codi=".(int)$depe_codi." order by 1";
         return $sql;
     }
 //obtiene usuarios de bandeja compartida del jefe

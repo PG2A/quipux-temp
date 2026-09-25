@@ -152,6 +152,19 @@ function get_inbox_data($inbox, $txt_start_date, $txt_end_date, $orderType, $ord
 }
 
 
+if (!function_exists('sql_plazo_dh')) {
+    /**
+     * Expresion SQL que formatea un interval de PostgreSQL como "3d 5h";
+     * cuando es menos de un dia baja a "5h 20m", que es el detalle util ahi.
+     */
+    function sql_plazo_dh($intervalo) {
+        $j = "justify_hours($intervalo)";
+        return "(case when extract(day from $j)::int > 0
+                      then extract(day from $j)::int||'d '||extract(hour from $j)::int||'h'
+                      else extract(hour from $j)::int||'h '||extract(minute from $j)::int||'m' end)";
+    }
+}
+
 switch($db->driver) {
     case 'postgres':
     $datos_usuarios = "(select usua_codi, usua_nomb||' '||usua_apellido as \"usua_nombre\", depe_codi, inst_codi from usuarios
@@ -180,16 +193,22 @@ switch($db->driver) {
                     ,'$popup' as \"SCR_ \"
                     ,'mostrar_documento(\"'||radi_nume_radi||'\",\"'||radi_nume_text||'\",\"'||$carpeta||'\")' as \"HID_POPUP\"
                     ,ver_usuarios(radi_usua_rem,',') as \"De\"
-                    ,ver_usuarios(radi_usua_dest,',') as \"Para\"
+                    -- Si algún destinatario es un ciudadano pendiente de aprobación (RQT-7) se
+                    -- indica debajo de los nombres (el paginador convierte el salto de línea
+                    -- en <br>): el documento no puede enviarse todavía.
+                    ,ver_usuarios(radi_usua_dest,',')
+                     || case when exists (select 1 from usuario ux where ux.usua_esta = 2
+                                          and position('-'||ux.usua_codi||'-' in coalesce(radi_usua_dest,'')||coalesce(radi_cca,'')) > 0)
+                             then chr(10) || '{{badge:Pendiente de aprobación}}' else '' end as \"Para\"
                     ,radi_asunto as \"Asunto\"
                     ,substr(fecha_documento::text,1,19)||' $descZonaHoraria' as \"DAT_Fecha Documento\"
                     ,radi_nume_radi as \"HID_RADI_NUME_RADI\"
                     ,radi_nume_text as \"Número Documento\"
-                    ,radi_cuentai as \"No. Referencia\"                                   
+                    ,radi_cuentai as \"No. Referencia\"
                     ,ver_usuarios(radi_usua_ante::text,',') as \"Usuario Anterior\"
                     ,radi_leido as \"HID_RADI_LEIDO\"
                     from (
-                        select b.radi_nume_radi,cat.cat_descr,1,2, b.radi_usua_rem, b.radi_usua_dest
+                        select b.radi_nume_radi,cat.cat_descr,1,2, b.radi_usua_rem, b.radi_usua_dest, b.radi_cca
                         , b.radi_asunto
                         , b.fecha_documento, 3, b.radi_nume_text, b.radi_cuentai,b.radi_usua_ante
                         , b.radi_nume_temp, b.radi_path, b.radi_tipo , b.radi_leido
@@ -432,6 +451,48 @@ switch($db->driver) {
             //echo $isql;
             break;
 
+        case 17: // Trámites gestionados en mi puesto mientras estuvo subrogado (TITULAR)
+        case 18: // Trámites que gestioné actuando como subrogante (SUBROGANTE)
+            if ($orderNo=='') $orderNo=6;
+
+            // Ambas bandejas son de sólo lectura y se resuelven contra el sello
+            // radicado_subrogacion. No filtran por estado de la subrogación, así
+            // que sirven igual durante el período y una vez finalizado.
+            // Sólo cambia el extremo de la relación por el que se filtra.
+            $campo_subr       = ($carpeta == 17) ? "usua_subrogado" : "usua_subrogante";
+            $rol_contrario    = ($carpeta == 17) ? "s.usua_subrogante" : "s.usua_subrogado";
+            $titulo_contrario = ($carpeta == 17) ? "Gestionado por" : "Puesto subrogado";
+
+            $isql = "select -- Bandeja Subrogación $info_usuario_query
+                    radi_nume_radi AS \"CHK_checkValue\"
+                    ,'$popup' as \"SCR_ \"
+                    ,case when upper(cat_descr)='URGENTE' then '$urgente' else '' end as \" \"
+                    ,'mostrar_documento(\"'||radi_nume_radi||'\",\"'||radi_nume_text||'\",\"'||$carpeta||'\")' as \"HID_POPUP\"
+                    ,ver_usuarios(contraparte::text,',') AS \"$titulo_contrario\"
+                    ,radi_asunto AS \"Asunto\"
+                    ,substr(fecha_sello::text,1,19)||' $descZonaHoraria' as \"DAT_Fecha\"
+                    ,radi_nume_radi AS \"HID_RADI_NUME_RADI\"
+                    ,radi_nume_text AS \"Número Documento\"
+                    ,periodo as \"Período de subrogación\"
+                    ,situacion as \"Estado\"
+                    ,1 as \"HID_RADI_LEIDO\"
+                    from (
+                        select b.radi_nume_radi, cat.cat_descr, 1, 2
+                        , $rol_contrario as contraparte, b.radi_asunto, rs.fecha as fecha_sello
+                        , b.radi_nume_temp, b.radi_nume_text
+                        , substr(s.usua_fecha_inicio::text,1,10)||' a '||substr(s.usua_fecha_fin::text,1,10) as periodo
+                        , case when s.estado = 1 then 'En curso' else 'Finalizada' end as situacion
+                        from radicado_subrogacion rs
+                        join usuarios_subrogacion s on s.usua_subrogacion_codi = rs.usua_subrogacion_codi
+                        left outer join radicado b on b.radi_nume_radi = rs.radi_nume_radi
+                        left outer join categoria cat on coalesce(b.cat_codi,0) = cat.cat_codi
+                        where s.$campo_subr = " . $_SESSION["usua_codi"] . "
+                          and rs.tipo = 'T'
+                          $whereFiltro
+                        order by " . ($orderNo+1) . " $orderTipo, radi_nume_radi $orderTipo
+                    ) as a order by " . ($orderNo+1) . " $orderTipo, radi_nume_radi $orderTipo";
+            break;
+
         case 14: //Bandeja Compartida solo Documentos Recibidos
             if (isset ($replicacion) && $replicacion && $config_db_replica_cuerpo_paginador!=$config_db_replica_bandeja_compartida_recibidos) $db = new ConnectionHandler(__DIR__,$config_db_replica_bandeja_compartida_recibidos);
             if ($orderNo=='') $orderNo=7;
@@ -466,7 +527,7 @@ switch($db->driver) {
 
         case 15: //Tareas Recibidas o asignadas al usuario actual
             if (isset ($replicacion) && $replicacion && $config_db_replica_cuerpo_paginador!=$config_db_replica_bandeja_tareas_recibidas) $db = new ConnectionHandler(__DIR__,$config_db_replica_bandeja_tareas_recibidas);
-            if ($orderNo=='') $orderNo=9;
+            if ($orderNo=='') $orderNo=10;  // +1 por la columna del icono de apertura
 
             $where_tarea = "";
             if ($tarea_estado != 0) $where_tarea .= " and estado=$tarea_estado";
@@ -475,13 +536,14 @@ switch($db->driver) {
 
             $isql = "select -- Tareas Recibidas $info_usuario_query
                     radi_nume_radi as \"CHK_CHKANULAR\"
+                    ,'$popup' as \"SCR_ \"
                     ,fecha_inicio::date ||'$descZonaHoraria' as \"Fecha Asignación\"
                     ,ver_usuarios(usua_codi_ori::text, ',') as \"Asignado por\"
                     ,comentario as \"Comentario\"
-                    ,fecha_maxima::date ||'$descZonaHoraria' as \"Fecha Máxima\"
+                    ,coalesce(to_char(fecha_maxima,'YYYY-MM-DD HH24:MI'),'') ||' $descZonaHoraria' as \"Fecha Máxima\"
                     ,avance||'%' as \"Avance\"
                     ,estado as \"Estado\"
-                    ,case when dias_retraso>0 then '<font color=\"red\">'||dias_retraso||' d&iacute;as</font>' else '' end as \"SCR_Días Retraso\"
+                    ,case when plazo_clase = '' then '' else '<span class=\"'||plazo_clase||'\">'||plazo_texto||'</span>' end as \"SCR_Plazo\"
                     ,'mostrar_documento(\"'||radi_nume_radi||'\",\"'||radi_nume_text||'\",\"'||$carpeta||'\")' as \"HID_POPUP\"
                     ,radi_nume_text as \"Número Documento\"
                     ,substr(fecha_documento::text,1,19)||'$descZonaHoraria' as \"DAT_Fecha Documento\"
@@ -494,6 +556,19 @@ switch($db->driver) {
                         , case when t.estado=1 then 'Pendiente' else (case when t.estado=2 then 'Finalizado' else 'Cancelado' end) end as \"estado\"
                         , coalesce(t.fecha_fin,now())::date-t.fecha_maxima::date as \"dias_retraso\"
                         , b.radi_nume_text, $fecha_documento as fecha_documento, 1, b.radi_usua_rem, b.radi_usua_dest, b.radi_asunto
+                        , case when t.estado <> 1 then
+                                    (case when t.fecha_maxima is null then 'plazo-cerrado'
+                                          when coalesce(t.fecha_fin,now()) > t.fecha_maxima then 'plazo-vencido'
+                                          else 'plazo-ok' end)
+                               when t.fecha_maxima is null then ''
+                               when t.fecha_maxima <= now() then 'plazo-vencido'
+                               when t.fecha_maxima <= now() + interval '24 hour' then 'plazo-hoy'
+                               else 'plazo-ok' end as plazo_clase
+                        , case when t.estado <> 1 then (case when t.estado = 3 then 'Cancelada en ' else 'Finalizada en ' end)||" . sql_plazo_dh('coalesce(t.fecha_fin,now()) - t.fecha_inicio') . "
+                               when t.fecha_maxima is null then ''
+                               when t.fecha_maxima <= now() then 'Vencido '||" . sql_plazo_dh('now() - t.fecha_maxima') . "
+                               else 'Faltan '||" . sql_plazo_dh('t.fecha_maxima - now()') . "
+                          end as plazo_texto
                         from
                             (select * from tarea where usua_codi_dest=".$_SESSION["usua_codi"]." $where_tarea) as t
                             left outer join tarea_hist_eventos th on th.tarea_hist_codi=t.comentario_inicio
@@ -505,7 +580,7 @@ switch($db->driver) {
 
         case 16: //Tareas Enviadas o Asignadas a otros funcionarios
             if (isset ($replicacion) && $replicacion && $config_db_replica_cuerpo_paginador!=$config_db_replica_bandeja_tareas_enviadas) $db = new ConnectionHandler(__DIR__,$config_db_replica_bandeja_tareas_enviadas);
-            if ($orderNo=='') $orderNo=9;
+            if ($orderNo=='') $orderNo=10;  // +1 por la columna del icono de apertura
 
             $where_tarea = "";
             if ($tarea_estado != 0) $where_tarea .= " and estado=$tarea_estado";
@@ -514,13 +589,14 @@ switch($db->driver) {
 
             $isql = "select -- Tareas Enviadas $info_usuario_query
                     radi_nume_radi as \"CHK_CHKANULAR\"
+                    ,'$popup' as \"SCR_ \"
                     ,fecha_inicio::date ||'$descZonaHoraria' as \"Fecha Asignación\"
                     ,ver_usuarios(usua_codi_dest::text, ',') as \"Asignado para\"
                     ,comentario as \"Comentario\"
-                    ,fecha_maxima::date ||'$descZonaHoraria' as \"Fecha Máxima\"
+                    ,coalesce(to_char(fecha_maxima,'YYYY-MM-DD HH24:MI'),'') ||' $descZonaHoraria' as \"Fecha Máxima\"
                     ,avance||'%' as \"Avance\"
                     ,estado as \"Estado\"
-                    ,case when dias_retraso>0 then '<font color=\"red\">'||dias_retraso||' d&iacute;as</font>' else '' end as \"SCR_Días Retraso\"
+                    ,case when plazo_clase = '' then '' else '<span class=\"'||plazo_clase||'\">'||plazo_texto||'</span>' end as \"SCR_Plazo\"
                     ,'mostrar_documento(\"'||radi_nume_radi||'\",\"'||radi_nume_text||'\",\"'||$carpeta||'\")' as \"HID_POPUP\"
                     ,radi_nume_text as \"Número Documento\"
                     ,substr(fecha_documento::text,1,19)|| '$descZonaHoraria' as \"DAT_Fecha Documento\"
@@ -533,6 +609,19 @@ switch($db->driver) {
                         , case when t.estado=1 then 'Pendiente' else (case when t.estado=2 then 'Finalizado' else 'Cancelado' end) end as \"estado\"
                         , coalesce(t.fecha_fin,now())::date-t.fecha_maxima::date as \"dias_retraso\"
                         , b.radi_nume_text, $fecha_documento as fecha_documento, 1, b.radi_usua_rem, b.radi_usua_dest, b.radi_asunto
+                        , case when t.estado <> 1 then
+                                    (case when t.fecha_maxima is null then 'plazo-cerrado'
+                                          when coalesce(t.fecha_fin,now()) > t.fecha_maxima then 'plazo-vencido'
+                                          else 'plazo-ok' end)
+                               when t.fecha_maxima is null then ''
+                               when t.fecha_maxima <= now() then 'plazo-vencido'
+                               when t.fecha_maxima <= now() + interval '24 hour' then 'plazo-hoy'
+                               else 'plazo-ok' end as plazo_clase
+                        , case when t.estado <> 1 then (case when t.estado = 3 then 'Cancelada en ' else 'Finalizada en ' end)||" . sql_plazo_dh('coalesce(t.fecha_fin,now()) - t.fecha_inicio') . "
+                               when t.fecha_maxima is null then ''
+                               when t.fecha_maxima <= now() then 'Vencido '||" . sql_plazo_dh('now() - t.fecha_maxima') . "
+                               else 'Faltan '||" . sql_plazo_dh('t.fecha_maxima - now()') . "
+                          end as plazo_texto
                         from
                             (select * from tarea where usua_codi_ori=".$_SESSION["usua_codi"]." $where_tarea) as t
                             left outer join tarea_hist_eventos th on th.tarea_hist_codi=t.comentario_inicio

@@ -37,7 +37,7 @@ function html_head ($flag_estilos=true, $flag_index=false) {
             <link href='/estilos/splitmenu.css' rel='stylesheet' type='text/css'>
             <link href='/estilos/template_css.css' rel='stylesheet' type='text/css'>
             <link href='/estilos/navbar.css' rel='stylesheet' type='text/css'>
-            <link href='/estilos/mejoras.css?v=20' rel='stylesheet' type='text/css'>
+            <link href='/estilos/mejoras.css?v=28' rel='stylesheet' type='text/css'>
             <link href='/estilos/skin.css?v=18' rel='stylesheet' type='text/css'>
             <link rel='shortcut icon' href='/imagenes/favicon.ico'>
             <link rel='stylesheet' type='text/css' href='/js/spiffyCal/spiffyCal_v2_1.css'>
@@ -128,7 +128,7 @@ function html_head1 ($flag_estilos=true, $flag_index=false) {
             <link href='../estilos/splitmenu.css' rel='stylesheet' type='text/css'>
             <link href='/estilos/template_css.css' rel='stylesheet' type='text/css'>
             <link href='/estilos/navbar.css' rel='stylesheet' type='text/css'>
-            <link href='/estilos/mejoras.css?v=20' rel='stylesheet' type='text/css'>
+            <link href='/estilos/mejoras.css?v=28' rel='stylesheet' type='text/css'>
             <link href='/estilos/skin.css?v=18' rel='stylesheet' type='text/css'>
             <link rel='shortcut icon' href='/imagenes/favicon.ico'>
             <link rel='stylesheet' type='text/css' href='".__DIR__."/js/spiffyCal/spiffyCal_v2_1.css'>
@@ -473,6 +473,18 @@ function count_inbox($inbox) {
 
         case 14: //compartida
             $sql = "select count(1) as total, count(case when radi_leido=0 then 1 else null end) as leidos from radicado r where esta_codi=2 and radi_usua_actu=".$_SESSION["usua_codi_jefe"].$and_inst." and radi_nume_radi not in (select radi_nume_radi from tarea where estado=1 and usua_codi_ori=".$_SESSION["usua_codi_jefe"].")";
+            break;
+
+        case 17: //Trámites gestionados en mi puesto mientras estuvo subrogado
+        case 18: //Trámites que gestioné como subrogante
+            // Bandejas de consulta: cuentan lo acumulado durante y después de la
+            // subrogación, por eso no filtran por estado. Sin "no leídos" porque
+            // son de sólo lectura.
+            $campo_subr = ($inbox == 17) ? "usua_subrogado" : "usua_subrogante";
+            $sql = "select count(1) as total, 0 as leidos
+                      from radicado_subrogacion rs
+                      join usuarios_subrogacion s on s.usua_subrogacion_codi = rs.usua_subrogacion_codi
+                     where s.$campo_subr = $id_user and rs.tipo = 'T'";
             break;
 
         case 15: //Tareas Recibidas

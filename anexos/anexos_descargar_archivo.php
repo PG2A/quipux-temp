@@ -136,19 +136,27 @@ if (substr($tipo_descarga,0,7) == "embeded") {
 //    } else {
         $url = "./anexos_descargar_archivo.php?radi_nume=$radi_nume&anex_codigo=$anex_codigo&arch_tipo=$arch_tipo&tipo_descarga=download";
 //    }
-    switch (substr($arch_nombre,-3)) {
+    // Extensión completa: substr(-3) no distingue ".jpeg" ni ".webp"
+    $arch_extension_ver = (strrpos($arch_nombre, ".") === false) ? "" : strtolower(substr($arch_nombre, 1+strrpos($arch_nombre, ".")));
+    switch ($arch_extension_ver) {
         case "pdf":
             if (substr($tipo_descarga, -2) == "ar") //Si tiene el plugin de Acrobat Reader
-                echo "<embed src='$url' type='text/html; charset=UTF-8' width='97%' height='100%'></embed>";
+                echo "<style>html,body{height:100%; margin:0; padding:0;}</style>
+                      <embed src='$url' type='text/html; charset=UTF-8' width='100%' height='100%'></embed>";
             else
                 include dirname(__DIR__)."/js/pdf_js/visor_pdf.php";
             break;
         case "png":
         case "jpg":
+        case "jpeg":
         case "gif":
         case "tif":
         case "bmp":
-            echo "<center><img src='$url' alt='No se puede mostrar la imagen del documento'></center>";
+        case "webp":
+            // La imagen ocupa todo el alto del popup manteniendo su proporción
+            echo "<style>html,body{height:100%; margin:0; padding:0; background-color:#FFFFFF;}</style>
+                  <img src='$url' alt='No se puede mostrar la imagen del documento'
+                       style='width:100%; height:100%; display:block; object-fit:contain; object-position:center;'>";
             break;
         case "txt":
 //            if ($arch_codi > 0) {

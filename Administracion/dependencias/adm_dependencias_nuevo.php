@@ -69,6 +69,36 @@ include_once("../tbasicas/listaAreas.php");
         nuevoAjax(nomDivInfoArea, 'GET', 'admDependencias_ajax.php', 'accion=' + datos);
         nuevoAjax(nomDiv, 'GET', 'compartirBandeja_ajax.php', 'accion=' + datos);
         nuevoAjax(nomDivJefe, 'GET', 'administrar_jefe_ajax.php', 'accion=' + datos);
+        <?php if($accion == 2) { ?>
+        puestosArea(depeCodi, '');
+        <?php } ?>
+    }
+
+    /**
+    * Panel "Puestos del Área" (catálogo cargo). Se repinta completo tras cada operación.
+    * params: '' (listar) | 'op=editar&cargo_id=N' | 'op=estado&estado=0|1&cargo_id=N'
+    **/
+    function puestosArea(depeCodi, params) {
+        var datos = 'dependencia=' + depeCodi + (params ? '&' + params : '');
+        nuevoAjax('div_puestos', 'POST', 'puestos_area_ajax.php', datos);
+    }
+    function grabarPuesto(depeCodi) {
+        var nombre = ltrim(document.getElementById('puesto_nombre').value);
+        if (nombre == '') {
+            alert('Ingrese el nombre del puesto.');
+            document.getElementById('puesto_nombre').focus();
+            return false;
+        }
+        var propagar = document.getElementById('puesto_propagar');
+        var datos = 'dependencia=' + depeCodi
+                  + '&op=grabar'
+                  + '&cargo_id=' + document.getElementById('puesto_cargo_id').value
+                  + '&nombre='   + encodeURIComponent(nombre)
+                  + '&cabecera=' + encodeURIComponent(document.getElementById('puesto_cabecera').value)
+                  + '&tipo='     + document.getElementById('puesto_tipo').value
+                  + '&propagar=' + ((propagar && propagar.type == 'checkbox') ? (propagar.checked ? 1 : 0) : 0);
+        nuevoAjax('div_puestos', 'POST', 'puestos_area_ajax.php', datos);
+        return true;
     }
     function desactivarArea(depeCodi,des_activar){           
         //nuevoAjax('div_des_activar', 'GET', 'adm_dependencias_eliminar.php', 'depe_codi=' + depeCodi+'&estado='+des_activar+'&accion='+<?=$accion?>);
@@ -264,7 +294,8 @@ $paginador = new ADODB_Pager_Ajax(dirname(__DIR__, 2), "div_busqueda_area", "bus
                         <div id="info_area"></div>
                         <?php if(isset($accion) && $accion==2){?>
                         <div id="div_jefe"></div>
-                        <div id="compartir"></div>                        
+                        <div id="compartir"></div>
+                        <div id="div_puestos"></div>
                         <?php } ?>
                 </td>
             </tr>

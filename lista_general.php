@@ -265,7 +265,29 @@ function vista_previa2(ruta,numrad,textrad) {
 
 if ($_SESSION["tipo_usuario"]==1) { // Si no es ciudadano
 
+    // Periodo de trabajo y modo (jerárquico / lineal) con que se creó el documento
+    // (lo sella el trigger trg_radicado_sellar_periodo, db/periodos/).
+    $txt_periodo = "Sin periodo";
+    $txt_modo = "&nbsp;";
+    $rs_per = $db->query(
+        "select p.periodo_nombre, to_char(p.fecha_inicio, 'YYYY-MM-DD') as desde,
+                to_char(p.fecha_fin, 'YYYY-MM-DD') as hasta, r.radi_jerarquico
+           from radicado r join periodo p on p.periodo_codi = r.periodo_codi
+          where r.radi_nume_radi = ?", array($datosrad["radi_nume_radi"]));
+    if ($rs_per && !$rs_per->EOF) {
+        $txt_periodo = htmlspecialchars($rs_per->fields["PERIODO_NOMBRE"], ENT_QUOTES, 'UTF-8')
+                     . " (" . $rs_per->fields["DESDE"] . " a " . $rs_per->fields["HASTA"] . ")";
+        $jer = $rs_per->fields["RADI_JERARQUICO"];
+        if ($jer !== null && $jer !== '')
+            $txt_modo = ($jer === 't' || $jer === true) ? "Jer&aacute;rquico" : "Lineal";
+    }
 ?>
+    <tr>
+        <td class="titulos2" align="right">Periodo:&nbsp;&nbsp; </td>
+        <td class="listado2"><?=$txt_periodo?></td>
+        <td class="titulos2" align="right">Periodo:&nbsp;&nbsp; </td>
+        <td class="listado2"><?=$txt_modo?></td>
+    </tr>
     <tr>
         <td class="titulos2" align="right">Nivel de Seguridad:&nbsp;&nbsp; </td>
         <td class='listado2' colspan="1">

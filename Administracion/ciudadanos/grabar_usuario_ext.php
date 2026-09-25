@@ -27,11 +27,22 @@
  */
 
 session_start();
-if($_SESSION["usua_admin_sistema"]!=1 and $_SESSION["usua_perm_ciudadano"]!=1) {
+include_once(dirname(__DIR__, 2).'/rec_session.php');
+include_once(dirname(__DIR__, 2).'/funciones_interfaz.php');
+// modo=solicitud: alta desde la búsqueda de destinatarios (RQT-7). Sólo al crear
+// (accion=1); el ciudadano queda en ciu_estado=2 hasta que un aprobador lo autorice.
+$modo_solicitud = (($_POST['modo'] ?? '') === 'solicitud' && ($_GET['accion'] ?? $_POST['accion'] ?? 0) == 1);
+$puede_solicitar = ($modo_solicitud && ($_SESSION["tipo_usuario"] ?? 0) != 2
+                   && (($_SESSION["usua_prad_tp1"] ?? 0) == 1 || ($_SESSION["usua_perm_ciudadano"] ?? 0) == 1 || ($_SESSION["usua_admin_sistema"] ?? 0) == 1));
+if (!$puede_solicitar and ($_SESSION["usua_admin_sistema"] ?? 0) != 1 and ($_SESSION["usua_perm_ciudadano"] ?? 0) != 1) {
     echo html_error("Lo sentimos, usted no tiene permisos suficientes para acceder a esta p&aacute;gina.");
     die("");
 }
-include_once(dirname(__DIR__, 2).'/rec_session.php');
+if ($modo_solicitud) {
+    include_once(dirname(__DIR__, 2).'/include/ciudadanos/SolicitudCiudadano.php');
+    if (!SolicitudCiudadano::disponible($db))
+        die(html_error("El m&oacute;dulo de solicitudes de ciudadanos no est&aacute; habilitado en la base de datos (ejecute db/ciudadanos_solicitud/ejecutar_migracion.sh)."));
+}
 require_once(dirname(__DIR__, 2)."/funciones.php"); //para traer funciones p_get y p_post
 require_once(dirname(__DIR__, 2).'/obtenerdatos.php'); //formar la observacion de edicion
 include_once(dirname(__DIR__, 2).'/funciones_interfaz.php');
@@ -49,35 +60,29 @@ $ciu_password = $ciu_password ?? 0;
 $mensaje = $mensaje ?? "";
 $codigo1 = $codigo1 ?? "";
 $ciu_sincedula = $ciu_sincedula ?? ($_POST['ciu_sincedula'] ?? 0);
-$nombre_servidor = $nombre_servidor ?? "";
-$cuenta_mail_soporte = $cuenta_mail_soporte ?? "";
+// config.php ya fue cargado dentro de ConnectionHandler, así que sus variables
+// sueltas no existen aquí; se toman de $CFG para que los correos lleven enlace.
+$nombre_servidor = !empty($nombre_servidor) ? $nombre_servidor : ($CFG->nombre_servidor ?? "");
+$cuenta_mail_soporte = !empty($cuenta_mail_soporte) ? $cuenta_mail_soporte : ($CFG->cuenta_mail_soporte ?? "");
 
-if (!isset($ciu_password)) {
-    $ciu_nuevo = 0;
-}
 //variable validar en servidor el grabar
 $grabar_ciu = 1;
 // Verificar si se va a insertar (accion = 1) o actualizar (else) a un ciudadano.
 // En el caso de que el ciudadano no ingrese su numero de cedula se genera un numero automaticamente igual a 9999999999 menos el codigo del usuario
-$flag_copiar_contrasena = false;
-
 if ($accion==1) {
     $record["inst_codi"] = $_SESSION["inst_codi"];
 
     $ciu_codigo = $db->nextId("usuarios_usua_codi_seq");
-    $flag_copiar_contrasena = true;
 
-    $ciu_nuevo = 0;
     $mensajeCorreo = "Se ha creado un usuario en el sistema QUIPUX como ciudadano con la siguiente información:";
 } else {
 
-    // Valido el cambio de contraseña segun la cedula actual del usuario
+    // Detecta si se cambió la cédula, para volver a validar que no esté repetida
     $sql = "select usua_cedula from usuario where usua_codi=$ciu_codigo";
     $rs= $db->conn->query($sql);
     if ($rs && !$rs->EOF && $rs->fields['USUA_CEDULA']!=$tmp_cedula) {
-        $flag_copiar_contrasena = true;
+        $cedula_modificada = true;
     }
-    if ($ciu_password == 1) $flag_copiar_contrasena = true;
     $mensajeCorreo = "Se han realizado los siguientes cambios en la información personal de su usuario:";
 }
 
@@ -87,19 +92,33 @@ if ($ciu_sincedula==1)
 if (substr($tmp_cedula,0,2)=="99" or trim($tmp_cedula)=="")
     $tmp_cedula = 9999999999-$ciu_codigo;
 
-if ($flag_copiar_contrasena) {
-    $sql = "select usua_pasw from usuario where usua_nuevo=1 and usua_esta=1 and usua_cedula='$tmp_cedula' and usua_codi<>$ciu_codigo";
-    $rs= $db->conn->query($sql);
-    if ($rs && !$rs->EOF) {
-        $record["ciu_pasw"] = $db->conn->qstr($rs->fields['USUA_PASW']);
-        $ciu_nuevo=1;
-        $mensaje = "<b>La contrase&ntilde;a registrada es la que se encuentra definida para las otras cuentas del usuario.</b><br>";
+// No se permiten dos cuentas activas con la misma cédula: ni otro ciudadano ni un
+// servidor público. Se valida al crear y al editar solo si la cédula cambió (los
+// duplicados históricos que ya existen no bloquean la edición de otros datos).
+// El paso de confirmación ya lo muestra al usuario; esta es la barrera definitiva
+// por si se llega aquí directamente.
+if ($accion == 1 || !empty($cedula_modificada)) {
+    $cuenta_existente = $ciud->cuentaExistentePorCedula($tmp_cedula, $ciu_codigo);
+    if ($cuenta_existente !== null) {
+        die(html_error($ciud->mensajeCuentaExistente($cuenta_existente, $tmp_cedula)));
     }
 }
 
-
-// Verifico si existen usuarios o ciudadanos creados con el mismo numero de cedula
-$sql = "select * from usuario where usua_cedula='$tmp_cedula'";
+// Clave inicial al crear el ciudadano o al marcar "Cambiar contraseña": su
+// cédula (o documento). Se informa en el correo de datos junto con el usuario;
+// no se envía enlace de cambio de clave. La cuenta queda activa (ciu_nuevo=1)
+// para no pasar por la activación de contraxx.php, y en el primer ingreso
+// login.php detecta que la clave sigue siendo la inicial y obliga a cambiarla.
+$clave_inicial = '';
+if ($modo_solicitud) {
+    // Pendiente de aprobación: sin clave todavía (se asigna al aprobar) y el
+    // correo de credenciales también sale en ese momento.
+    $ciu_nuevo = 1;
+} elseif ($accion == 1 || $ciu_password == 1) {
+    $clave_inicial = $ciud->claveInicial(($ciu_sincedula == 1) ? '' : $ciu_cedula, $ciu_documento, $tmp_cedula);
+    $record["ciu_pasw"] = $db->conn->qstr(md5($clave_inicial));
+    $ciu_nuevo = 1;
+}
 
 
 if(isset ($_POST["desactivar"]))
@@ -121,7 +140,8 @@ if($desactivar==0 && (!isset($_POST['ciu_desactiva']) || $_POST['ciu_desactiva']
 else
 {
     //$tmp_cedula = substr($tmp_cedula,0,10);
-    $ciu_estado = "1";
+    // 2 = pendiente de aprobación (RQT-7); el trigger lo publica en usuario con usua_esta=2
+    $ciu_estado = $modo_solicitud ? "2" : "1";
 
     $record["ciu_estado"]       = $ciu_estado;
     $record["ciu_cedula"]       = $db->conn->qstr(limpiar_sql(trim($tmp_cedula)));
@@ -187,23 +207,61 @@ else
     //Si son ciudadanos con nombre homónimos no modificar el ciudadano existente crear nuevo y eleminar de la tabla tmp.
     
     $upSql="update ciudadano_tmp set ciu_estado = 0 where ciu_codigo=$ciu_codigo";
-    
+
     $db->conn->query($upSql);
-    
-    // Cambiamos la contraseña del usuario y le mandamos un mail
-    if ($ciu_nuevo==0 and trim($ciu_email)!="") {
-        $usr_tipo = 2;
-        $usr_codigo = $ciu_codigo;
-        $usr_nombre = $ciu_nombre . " " . $ciu_apellido;
-        $usr_login = "U".$tmp_cedula;
-        $usr_cedula = $tmp_cedula;
-        $usr_email = $ciu_email;
-        include(dirname(__DIR__).'/usuarios/cambiar_password_mail.php');
-    
+
+    // Solicitud de alta (RQT-7): registrar la solicitud, avisar a los aprobadores
+    // y devolver el ciudadano al popup de destinatarios. Sin correo al ciudadano:
+    // sus credenciales salen cuando se apruebe.
+    if ($modo_solicitud && $grabar_ciu == 1) {
+        include_once(dirname(__DIR__, 2).'/include/ciudadanos/SolicitudCiudadano.php');
+        $solicitudes = new SolicitudCiudadano($db);
+        $sol_tipo = ((int)($_POST['tipo_destinatario'] ?? 1) == 3) ? 3 : 1;
+        $sol_codigo = $solicitudes->crear($ciu_codigo, $_POST['nurad'] ?? '', $sol_tipo, $_POST['observacion_solicita'] ?? '');
+        if ($sol_codigo) $solicitudes->correoNuevaSolicitud($sol_codigo);
+        $sol_aprobadores = count($solicitudes->correosAprobadores());
+
+        echo "<!DOCTYPE html>".html_head();
+        ?>
+<body>
+    <br><br>
+    <center>
+        <table width="50%" border="2" align="center" class="t_bordeGris">
+            <tr>
+                <td width="100%" height="30" class="listado2">
+                    <span class="etexto"><center><b>Solicitud registrada.</b><br/><br/>
+                    El ciudadano <?="$ciu_nombre $ciu_apellido"?> (CI <?=$tmp_cedula?>) queda <b>pendiente de aprobaci&oacute;n</b>
+                    y se agreg&oacute; al documento como <?=($sol_tipo == 3) ? "Copia" : "destinatario (Para)"?>.<br/>
+                    No podr&aacute; enviar el documento hasta que la solicitud sea aprobada.</center></span>
+                    <?php if ($sol_aprobadores == 0) { ?>
+                    <br/><center><font color="#b00">Atenci&oacute;n: no hay usuarios con el permiso de aprobar solicitudes de ciudadanos; comun&iacute;quese con el administrador.</font></center>
+                    <?php } ?>
+                </td>
+            </tr>
+            <tr>
+                <td height="30" class="listado2">
+                    <center><input class="botones" type="button" value="Aceptar" onclick="cerrar_solicitud();"></center>
+                </td>
+            </tr>
+        </table>
+    </center>
+    <script type="text/javascript">
+        function cerrar_solicitud() {
+            try {
+                if (window.opener && window.opener.agregar_ciudadano_solicitado)
+                    window.opener.agregar_ciudadano_solicitado('<?=$ciu_codigo?>', '<?=$sol_tipo?>');
+            } catch (e) {}
+            window.close();
+        }
+    </script>
+</body>
+</html>
+        <?php
+        die();
     }
-    
+
     if (trim($ciu_email)!="") {
-        
+
         $mail = "<!DOCTYPE html><title>Informaci&oacute;n Quipux</title>";
         $mail .= "<body><center><h1>QUIPUX</h1><br /><h2>Sistema de Gesti&oacute;n Documental</h2><br /><br /></center>";
         $mail .= "Estimado(a) $ciu_nombre $ciu_apellido.<br /><br />";
@@ -222,16 +280,26 @@ else
                   <tr><td><b>Referencia:</b></td><td>$ciu_referencia</td></tr>
                   
                   </table>";
-        $mail .= "<br /><br />Le recordamos que para acceder al sistema deber&aacute; hacerlo con el usuario &quot;$tmp_cedula&quot;
-                  ingresando a <a href='$nombre_servidor' target='_blank'>$nombre_servidor</a>";
+        if ($clave_inicial != '') {
+            $mail .= "<br /><br />Sus datos de acceso al sistema son:<br /><br />
+                      <table border='0'>
+                      <tr><td><b>Usuario:</b></td><td>$tmp_cedula</td></tr>
+                      <tr><td><b>Contrase&ntilde;a:</b></td><td>$clave_inicial</td></tr>
+                      </table><br />
+                      Al ingresar por primera vez el sistema le solicitar&aacute; cambiar esta contrase&ntilde;a.";
+            $mail .= "<br /><br />Puede acceder ingresando a <a href='$nombre_servidor' target='_blank'>$nombre_servidor</a>";
+        } else {
+            $mail .= "<br /><br />Le recordamos que para acceder al sistema deber&aacute; hacerlo con el usuario &quot;$tmp_cedula&quot;
+                      ingresando a <a href='$nombre_servidor' target='_blank'>$nombre_servidor</a>";
+        }
         $mail .= "<br /><br />Saludos cordiales,<br /><br />Soporte Quipux.";
         $mail .= "<br /><br /><b>Nota: </b>Este mensaje fue enviado autom&aacute;ticamente por el sistema, por favor no lo responda.";
         $mail .= "<br />Si tiene alguna inquietud respecto a este mensaje, comun&iacute;quese con <a href='mailto:$cuenta_mail_soporte'>$cuenta_mail_soporte</a>";
         $mail .= "</body></html>";
-        if ($ciu_nuevo==1)
-            enviarMail($mail, "Quipux: Actualización de datos.", $ciu_email, "$ciu_nombre $ciu_apellido", $ruta_raiz);
-        else
+        if ($accion == 1)
             enviarMail($mail, "Quipux: Creación de Ciudadano.", $ciu_email, "$ciu_nombre $ciu_apellido", $ruta_raiz);
+        else
+            enviarMail($mail, "Quipux: Actualización de datos.", $ciu_email, "$ciu_nombre $ciu_apellido", $ruta_raiz);
     }
     
     if (isset($_POST["ciu_codigo_eliminar"])) {
@@ -377,9 +445,13 @@ echo "<!DOCTYPE html>".html_head();
                 ?>
                 <center><input class="botones" type="submit" name="Submit" value="Aceptar" onclick="<?php echo ($cerrar == 'Si') ? "window.opener.refrescar_pagina('OI',".$cod_impresion."); window.close();" : "location='cuerpoUsuario_ext.php?cerrar=$cerrar&accion=2'"?>"/></center>
             <?php }else{
-                 
-                ?>                                                                                                                                                                
-                <center><input class="botones" type="submit" name="Submit" value="Aceptar" onclick="<?php echo ($cerrar == 'Si') ? "window.close()" : "location='cuerpoUsuario_ext.php?cerrar=$cerrar&accion=2'"?>"/></center>
+                // Creado desde el popup de destinatarios (cod_impresion=1): se agrega
+                // directamente al documento como "Para" antes de cerrar.
+                $js_cerrar = ($accion == 1 && (int)($_GET['cod_impresion'] ?? 0) == 1)
+                    ? "try { if (window.opener && window.opener.agregar_ciudadano_solicitado) window.opener.agregar_ciudadano_solicitado('$ciu_codigo','1'); } catch (e) {} window.close();"
+                    : "window.close()";
+                ?>
+                <center><input class="botones" type="submit" name="Submit" value="Aceptar" onclick="<?php echo ($cerrar == 'Si') ? $js_cerrar : "location='cuerpoUsuario_ext.php?cerrar=$cerrar&accion=2'"?>"/></center>
             <?php } ?>
 		</td> 
 	    </tr>

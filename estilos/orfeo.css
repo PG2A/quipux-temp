@@ -491,6 +491,31 @@ font-family: Arial, Helvetica, sans-serif;
 .bandeja-recibidos th:nth-child(12) { width: 9%;  }  /* No. Referencia */
 .bandeja-recibidos th:nth-child(13) { width: 12%; }  /* Usuario Anterior */
 
+/* Semáforo de la columna Plazo de las bandejas de Tareas.
+   Se calcula sobre tarea.fecha_maxima: mientras la tarea está pendiente cuenta
+   los días que faltan; una vez cerrada, si se pasó del plazo marca el retraso. */
+.plazo-ok,
+.plazo-hoy,
+.plazo-vencido,
+.plazo-cerrado {
+    display: inline-block;
+    padding: 0 5px;
+    border-radius: 3px;
+    font-weight: bold;
+    white-space: nowrap;
+    text-decoration: none;
+}
+.plazo-ok      { color: #14622c; background: #d9f2e0; }  /* verde: quedan días */
+.plazo-hoy     { color: #7a5200; background: #fdf1c7; }  /* amarillo: vence hoy */
+.plazo-vencido { color: #8a1414; background: #fbd9d9; }  /* rojo: ya venció */
+.plazo-cerrado { color: #55606a; background: #e7ebee; }  /* gris: cerrada a tiempo */
+
+/* El renderizador emite las columnas SCR_ con align=center, que es lo correcto
+   para los iconos pero no para esta, que es texto. La alineamos a la izquierda
+   como el resto de columnas de datos. */
+.bandeja-tareas-recibidas td:nth-child(9),
+.bandeja-tareas-enviadas  td:nth-child(9) { text-align: left; }
+
 /* Enviados (case 8) */
 .bandeja-enviados th:nth-child(1) { width: 28px; }
 .bandeja-enviados th:nth-child(2),
@@ -504,31 +529,34 @@ font-family: Arial, Helvetica, sans-serif;
 .bandeja-enviados th:nth-child(12) { width: 11%; }   /* No. Referencia */
 
 /* Tareas Recibidas (case 15) */
+/* Los nth-child siguen el orden real de columnas del SELECT, contando también
+   las ocultas: 1 check, 2 icono, ..., 10 y 13 HID, 16 Asunto (toma el resto). */
 .bandeja-tareas-recibidas th:nth-child(1)  { width: 28px; }
-.bandeja-tareas-recibidas th:nth-child(2)  { width: 8%; }    /* Fecha Asignación */
-.bandeja-tareas-recibidas th:nth-child(3)  { width: 10%; }   /* Asignado por */
-.bandeja-tareas-recibidas th:nth-child(4)  { width: 14%; }   /* Comentario */
-.bandeja-tareas-recibidas th:nth-child(5)  { width: 8%; }    /* Fecha Máxima */
-.bandeja-tareas-recibidas th:nth-child(6)  { width: 5%; }    /* Avance */
-.bandeja-tareas-recibidas th:nth-child(7)  { width: 7%; }    /* Estado */
-.bandeja-tareas-recibidas th:nth-child(8)  { width: 6%; }    /* Dias Retraso */
-.bandeja-tareas-recibidas th:nth-child(9)  { width: 12%; }   /* Número Documento */
-.bandeja-tareas-recibidas th:nth-child(10) { width: 8%; }    /* Fecha Documento */
-.bandeja-tareas-recibidas th:nth-child(12) { width: 8%; }    /* De */
-.bandeja-tareas-recibidas th:nth-child(13) { width: 8%; }    /* Para */
-/* nth-child(11) HID oculta y nth-child(14) Asunto toma el resto */
+.bandeja-tareas-recibidas th:nth-child(2)  { width: 26px; }  /* icono de apertura */
+.bandeja-tareas-recibidas th:nth-child(3)  { width: 8%; }    /* Fecha Asignación */
+.bandeja-tareas-recibidas th:nth-child(4)  { width: 10%; }   /* Asignado por */
+.bandeja-tareas-recibidas th:nth-child(5)  { width: 10%; }   /* Comentario */
+.bandeja-tareas-recibidas th:nth-child(6)  { width: 11%; }    /* Fecha Máxima */
+.bandeja-tareas-recibidas th:nth-child(7)  { width: 5%; }    /* Avance */
+.bandeja-tareas-recibidas th:nth-child(8)  { width: 7%; }    /* Estado */
+.bandeja-tareas-recibidas th:nth-child(9)  { width: 12%; }   /* Plazo */
+.bandeja-tareas-recibidas th:nth-child(11) { width: 11%; }   /* Número Documento */
+.bandeja-tareas-recibidas th:nth-child(12) { width: 8%; }    /* Fecha Documento */
+.bandeja-tareas-recibidas th:nth-child(14) { width: 8%; }    /* De */
+.bandeja-tareas-recibidas th:nth-child(15) { width: 8%; }    /* Para */
 
 /* Tareas Enviadas (case 16) */
 .bandeja-tareas-enviadas th:nth-child(1)  { width: 28px; }
-.bandeja-tareas-enviadas th:nth-child(2)  { width: 8%; }    /* Fecha Asignación */
-.bandeja-tareas-enviadas th:nth-child(3)  { width: 10%; }   /* Asignado para */
-.bandeja-tareas-enviadas th:nth-child(4)  { width: 14%; }   /* Comentario */
-.bandeja-tareas-enviadas th:nth-child(5)  { width: 8%; }    /* Fecha Máxima */
-.bandeja-tareas-enviadas th:nth-child(6)  { width: 5%; }    /* Avance */
-.bandeja-tareas-enviadas th:nth-child(7)  { width: 7%; }    /* Estado */
-.bandeja-tareas-enviadas th:nth-child(8)  { width: 6%; }    /* Dias Retraso */
-.bandeja-tareas-enviadas th:nth-child(9)  { width: 12%; }   /* Número Documento */
-.bandeja-tareas-enviadas th:nth-child(10) { width: 8%; }    /* Fecha Documento */
-.bandeja-tareas-enviadas th:nth-child(12) { width: 8%; }    /* De */
-.bandeja-tareas-enviadas th:nth-child(13) { width: 8%; }    /* Para */
+.bandeja-tareas-enviadas th:nth-child(2)  { width: 26px; }  /* icono de apertura */
+.bandeja-tareas-enviadas th:nth-child(3)  { width: 8%; }    /* Fecha Asignación */
+.bandeja-tareas-enviadas th:nth-child(4)  { width: 10%; }   /* Asignado para */
+.bandeja-tareas-enviadas th:nth-child(5)  { width: 10%; }   /* Comentario */
+.bandeja-tareas-enviadas th:nth-child(6)  { width: 11%; }    /* Fecha Máxima */
+.bandeja-tareas-enviadas th:nth-child(7)  { width: 5%; }    /* Avance */
+.bandeja-tareas-enviadas th:nth-child(8)  { width: 7%; }    /* Estado */
+.bandeja-tareas-enviadas th:nth-child(9)  { width: 12%; }   /* Plazo */
+.bandeja-tareas-enviadas th:nth-child(11) { width: 11%; }   /* Número Documento */
+.bandeja-tareas-enviadas th:nth-child(12) { width: 8%; }    /* Fecha Documento */
+.bandeja-tareas-enviadas th:nth-child(14) { width: 8%; }    /* De */
+.bandeja-tareas-enviadas th:nth-child(15) { width: 8%; }    /* Para */
 /* nth-child(11) HID oculta y nth-child(14) Asunto toma el resto */

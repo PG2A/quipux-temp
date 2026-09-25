@@ -32,6 +32,13 @@ include_once(dirname(__DIR__, 2).'/rec_session.php');
 include_once(dirname(__DIR__, 2)."/obtenerdatos.php");
 include_once(dirname(__DIR__, 2).'/funciones.php');
 
+$buscar_nom = $_POST["buscar_nom"] ?? '';
+$buscar_car = trim(limpiar_sql($_POST["buscar_car"] ?? ''));
+$buscar_tipo = trim(limpiar_sql($_POST["buscar_tipo"] ?? '0'));
+$buscar_inst = trim(limpiar_sql($_POST["buscar_inst"] ?? '0'));
+$buscar_depe = trim(limpiar_sql($_POST["buscar_depe"] ?? '0'));
+$lista_usr = trim(limpiar_sql($_POST["lista_usr"] ?? '0'));
+
 if (!$buscar_inst) $buscar_inst="0";
 if (!$buscar_depe) $buscar_depe="0";
 if (!$lista_usr) $lista_usr="0";
@@ -52,7 +59,7 @@ $usuarios_lista = "";
         <td width="10%" class="titulos5">Subrogado</td>
         <td width="5%" class="titulos5">Acción</td>
     </tr>
-<?
+<?php
 //$buscar_nom = trim(limpiar_sql($buscar_nom));
 $cedulaFinal = str_replace(" ", '', $buscar_nom);
 $buscar_nom = trim(limpiar_sql($buscar_nom));
@@ -117,7 +124,7 @@ if (($buscar_nom!="" or $buscar_car!="" or $buscar_inst!="0" or $buscar_depe!="0
     if ($buscar_depe != 0) 
         $sql .= " and (usr1.depe_codi=$buscar_depe or usr2.depe_codi=$buscar_depe)";
     else
-        if ($depe_codi_admin!=0)
+        if (!empty($depe_codi_admin))
         $sql .= " and (usr1.depe_codi in ($depe_codi_admin) or usr2.depe_codi in ($depe_codi_admin))";
     $sql .= " order by usr1.depe_codi,usr1.usua_nombre";//comentado por David Gamboa, requerimiento quitar el limit
     //$sql .= " order by u.usua_nombre asc limit 300 offset 0";
@@ -158,7 +165,7 @@ if ($sql!="") {
         </td>
                  
     </tr>
-  <?
+  <?php
         $i++;
         $dependencia_color = trim($rs->fields["DEPE_CODI"]);
         $rs->MoveNext();

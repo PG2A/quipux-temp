@@ -1,4 +1,4 @@
-select -- Busqueda Avanzada Tramites - USR 39063 - 2026-03-29 19:25:36<br>
+select -- Busqueda Avanzada Tramites - USR 39082 - 2026-09-01 20:19:40<br>
         radi_nume_text as "No. Documento"
         ,substr(radi_fech_ofic::text,1,19) || '' as "SCR_Fecha Documento"
         ,'mostrar_documento("'||radi_nume_radi||'","'||radi_nume_text||'")' as "HID_RADI_NUME_RADI"
@@ -40,9 +40,9 @@ select -- Busqueda Avanzada Tramites - USR 39063 - 2026-03-29 19:25:36<br>
                     , r1.radi_usua_rem, r1.radi_usua_dest
                 from radicado r1
                 where r1.radi_inst_actu=3
-                    and r1.radi_nume_radi::text like '%1' and esta_codi in (0,2) 
-                    and r1.radi_fech_ofic::date >= '2026-02-27'::date
-                    and r1.radi_fech_ofic::date <= '2026-03-29'::date
+                    and r1.radi_nume_radi::text like '%1' and esta_codi in (0,2)  and r1.radi_nume_radi in (select radi_nume_radi from hist_eventos where usua_codi_ori in (39082) or usua_codi_dest in (39082))
+                    and r1.radi_fech_ofic::date >= '2026-08-02'::date
+                    and r1.radi_fech_ofic::date <= '2026-09-01'::date
                     
                     
             ) as r

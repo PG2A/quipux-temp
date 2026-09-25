@@ -30,8 +30,8 @@ include_once(dirname(__DIR__, 2).'/funciones_interfaz.php');
 include_once(dirname(__DIR__, 2).'/funciones.php');
 
 if (isset($_POST["krd"])) {
-    include_once("dirname(__DIR__, 2)/include/db/ConnectionHandler.php");
-    $db = new ConnectionHandler(__DIR__);
+    include_once(dirname(__DIR__, 2).'/include/db/ConnectionHandler.php');
+    $db = new ConnectionHandler(dirname(__DIR__, 2));
     $krd = limpiar_sql(trim($_POST["krd"]));
     $accion_aceptar = "window.location='../../login.php'";
     $flag = false;
@@ -39,7 +39,10 @@ if (isset($_POST["krd"])) {
     session_start();
     include_once(dirname(__DIR__, 2).'/rec_session.php');
     $krd = $_SESSION["krd"];
-    if (substr($krd,0,1)=="U")
+    $forzado = !empty($_SESSION["forzar_cambio_clave"]);
+    if ($forzado)
+        $accion_aceptar = "window.location='../../index_frames.php'"; // primer ingreso: entrar al sistema
+    elseif (substr($krd,0,1)=="U")
         $accion_aceptar = "window.location='../../Administracion/formAdministracion.php'";
     else
         $accion_aceptar = "window.location='../../cuerpo.php?carpeta=81&adodb_next_page=1'";
@@ -71,8 +74,10 @@ if ($pass_new == $pass_ver and $pass_new != "" and ($usr_pass === $md5_32 || $us
     $isql = "update ciudadano set ciu_pasw='$pass_new' where ciu_cedula='$usr_cedula'";
     $ok2 = $db->query($isql);
     $mensaje = "Su contrase&ntilde;a ha sido cambiada exitosamente.";
+    if ($flag) $_SESSION["forzar_cambio_clave"] = 0; // ya no usa la clave inicial
 } else {
     $mensaje = "No se pudo cambiar su contrase&ntilde;a.";
+    if (!empty($forzado)) $accion_aceptar = "window.location='cambiar_password.php?forzar=1'";
 }
 
 ?>

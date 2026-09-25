@@ -75,9 +75,16 @@ if ($tipo_acceso === 'externo' && !empty($krd) && !empty($drd)) {
             $db->conn->SetFetchMode(ADODB_FETCH_ASSOC);
 
             $krd_upper = strtoupper("U" . $krd);
-            $query = "SELECT u.*, d.depe_nomb FROM usuarios u
-                      LEFT JOIN dependencia d ON d.depe_codi = u.depe_codi
-                      WHERE UPPER(u.usua_login) = UPPER('$krd_upper') AND u.usua_esta = 1 LIMIT 1";
+            // Se lee de la tabla unificada 'usuario' (funcionarios + ciudadanos), que
+            // ya trae depe_nomb, inst_nombre y tipo_usuario (1 funcionario / 2
+            // ciudadano). Se toma la cuenta concreta que autenticar() validó, por si
+            // la misma cédula tiene cuenta de funcionario y de ciudadano.
+            $usua_codi_aut = $_SESSION['usua_codi_autenticado'] ?? null;
+            unset($_SESSION['usua_codi_autenticado']);
+            $where_cuenta = ($usua_codi_aut !== null) ? " AND u.usua_codi = " . (int)$usua_codi_aut : "";
+            $query = "SELECT u.* FROM usuario u
+                      WHERE UPPER(u.usua_login) = UPPER('$krd_upper') AND u.usua_esta = 1 AND usuario_vigente(u.usua_codi) $where_cuenta
+                      ORDER BY u.tipo_usuario ASC, u.usua_codi ASC LIMIT 1";
             $rs = $db->conn->Execute($query);
 
             if ($rs && !$rs->EOF) {
@@ -87,7 +94,7 @@ if ($tipo_acceso === 'externo' && !empty($krd) && !empty($drd)) {
                 $depe_codi = (int)($rs->fields['DEPE_CODI'] ?? 0);
                 $usua_nomb = trim(($rs->fields['USUA_NOMB'] ?? '') . ' ' . ($rs->fields['USUA_APELLIDO'] ?? ''));
                 $usua_email = $rs->fields['USUA_EMAIL'] ?? '';
-                $tipo_usuario = (int)($rs->fields['USUA_TIPO'] ?? 0);
+                $tipo_usuario = (int)($rs->fields['TIPO_USUARIO'] ?? 0);
                 $inst_codi = (int)($rs->fields['INST_CODI'] ?? 0);
                 if ($inst_codi <= 0 && $depe_codi > 0)
                     $inst_codi = (int)$db->conn->GetOne("select coalesce(inst_codi,0) from dependencia where depe_codi=$depe_codi");
@@ -98,6 +105,15 @@ if ($tipo_acceso === 'externo' && !empty($krd) && !empty($drd)) {
                 $_SESSION["krd"] = $krd_upper;
                 $_SESSION["user"] = $rs->fields['USUA_LOGIN'] ?? $krd_upper;
                 $_SESSION["usua_codi"] = $usua_codi;
+                // Identidad de SESIÓN: siempre la persona física autenticada.
+                // usua_codi puede cambiar después (al asumir un cargo subrogado),
+                // pero la fila de usuarios_sesion sigue perteneciendo a esta
+                // persona, de modo que el titular del cargo no sea expulsado
+                // cuando su subrogante actúa bajo la identidad del puesto.
+                $_SESSION["usua_codi_sesion"] = $usua_codi;
+                // Sin subrogación en curso al iniciar sesión.
+                $_SESSION["usua_codi_real"] = $usua_codi;
+                $_SESSION["subrogacion_codi"] = 0;
                 $_SESSION["depe_codi"] = $depe_codi;
                 $_SESSION["dependencia"] = $depe_codi;
                 $_SESSION["depe_nomb"] = $rs->fields['DEPE_NOMB'] ?? '';
@@ -153,15 +169,28 @@ if ($tipo_acceso === 'externo' && !empty($krd) && !empty($drd)) {
                         include(__DIR__ . "/contraxx.php");
                         die();
                     }
-                    
+
+                    // Ciudadanos: la clave inicial es su cédula/documento (ver
+                    // Administracion/ciudadanos/grabar_usuario_ext.php). Mientras siga
+                    // usándola, rec_session.php solo le permite la pantalla de cambio
+                    // de contraseña.
+                    $_SESSION["forzar_cambio_clave"] = 0;
+                    if ($tipo_usuario == 2) {
+                        $claves_iniciales = array(trim((string)($rs->fields['USUA_CEDULA'] ?? '')), substr($krd_upper, 1));
+                        $documento = $db->conn->GetOne("select ciu_documento from ciudadano where ciu_codigo=$usua_codi");
+                        if (trim((string)$documento) != '') $claves_iniciales[] = trim($documento);
+                        if (in_array(trim($drd), $claves_iniciales, true)) $_SESSION["forzar_cambio_clave"] = 1;
+                    }
+                    $destino = $_SESSION["forzar_cambio_clave"] ? 'Administracion/usuarios/cambiar_password.php?forzar=1' : 'index_frames.php';
+
                     // header('Location: index_frames.php');
                     // exit;
                     ?>
                     <script type="text/javascript">
                         window.moveTo(0, 0);
                         window.resizeTo(screen.availWidth, screen.availHeight);
-                        
-                        window.location.href = 'index_frames.php';
+
+                        window.location.href = '<?=$destino?>';
                     </script>
                     <?php
                     exit;

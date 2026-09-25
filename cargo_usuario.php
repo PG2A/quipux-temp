@@ -28,10 +28,18 @@
 
 include_once(__DIR__.'/rec_session.php');
 require_once( __DIR__.'/funciones.php');
+include_once(__DIR__.'/include/subrogacion/Subrogacion.php');
 
 global $db, $CFG;
 
 $username = limpiar_sql($_SESSION["krd"]);
+
+// Cargos que esta persona subroga con vigencia activa. Antes del rediseño estos
+// aparecían aquí como cuentas clonadas que compartían usua_login; ahora se
+// resuelven contra usuarios_subrogacion, sin duplicar usuarios.
+$usua_codi_real = (int)($_SESSION["usua_codi_real"] ?? $_SESSION["usua_codi"]);
+$subrogacion = new Subrogacion($db);
+$contextosSubrogados = $subrogacion->contextosVigentes($usua_codi_real);
 
 $where = "";
 if($CFG->config_bloquear_acceso_ciudadano) {
@@ -45,7 +53,7 @@ $sql = "SELECT u.usua_codi,
             u.usua_nombre,
             u.tipo_usuario
         FROM usuario u
-        WHERE u.usua_login LIKE UPPER('$username') AND u.usua_esta = 1 $where
+        WHERE u.usua_login LIKE UPPER('$username') AND u.usua_esta = 1 AND usuario_vigente(u.usua_codi) $where
         ORDER BY u.tipo_usuario ASC, u.usua_nombre, u.inst_nombre";
 
 $rs = $db->query($sql);
@@ -69,6 +77,23 @@ if ($rs and !$rs->EOF) {
         $cargoCombo .= "</option>";
         $rs->MoveNext();
     }
+
+    // Cargos subrogados vigentes. Al elegir uno, la sesión asume la identidad
+    // del puesto (ver reiniciar_session.php), con lo que las bandejas, las
+    // funciones y los permisos pasan a ser los del cargo.
+    foreach ($contextosSubrogados as $ctx) {
+        $seleccion = ((int)$ctx["USUA_SUBROGADO"] == (int)$_SESSION["usua_codi"]) ? 'selected' : '';
+        $hasta = substr($ctx["USUA_FECHA_FIN"], 0, 10);
+
+        $cargoCombo .= "<option value='".$ctx["USUA_SUBROGADO"]."' $seleccion>"
+                     . "<i>(Subr.) </i>Subrogante de: ".$ctx["USUA_NOMBRE"]
+                     . " / Institución: ".$ctx["INST_NOMBRE"]
+                     . " / Área: ".$ctx["DEPE_NOMB"]
+                     . " / Puesto: ".$ctx["USUA_CARGO"]
+                     . " / Hasta: ".$hasta
+                     . "</option>";
+    }
+
     $cargoCombo .= "</select>";
     echo "<table border='0' cellspacing='2' cellpadding='0' class='selectCargo' style='border: none;' width='100%'><tr><td>$nombre</td><td>$cargoCombo</td></tr></table>";
 }

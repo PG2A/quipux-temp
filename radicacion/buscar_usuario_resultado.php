@@ -87,6 +87,14 @@ $usr_tipo = ", (CASE WHEN u.inst_codi=0 THEN 3 ELSE (CASE WHEN u.inst_codi=".$_S
 
 $where = "";
 
+// Ciudadanos pendientes de aprobación (usua_esta=2, RQT-7): sólo los ve quien
+// hizo la solicitud; para el resto, únicamente cuentas activas.
+include_once(dirname(__DIR__).'/include/ciudadanos/SolicitudCiudadano.php');
+$filtro_estado = "usua_esta = 1";
+if (SolicitudCiudadano::disponible($db))
+    $filtro_estado = "(usua_esta = 1 or (usua_esta = 2 and usua_codi in (select ciu_codigo from solicitud_ciudadano
+                       where estado = 0 and usua_codi_solicita = " . (int)$_SESSION["usua_codi"] . ")))";
+
 if (($buscar_nom!="" or $buscar_car!="" or $buscar_inst!="0" or $buscar_depe!="0") and $lista_usr=="0") {
 
     $where .= buscar_datos_usuario($buscar_nom);
@@ -100,7 +108,7 @@ if (($buscar_nom!="" or $buscar_car!="" or $buscar_inst!="0" or $buscar_depe!="0
         $where .= " and depe_codi=$buscar_depe";
 
     $sql = "select u.* $usr_tipo $usr_sesion 
-            from (select * from usuario where usua_esta<>0 and upper(usua_login) not like 'UADM%' and usua_codi>0 $where) as u
+            from (select * from usuario where $filtro_estado and upper(usua_login) not like 'UADM%' and usua_codi>0 $where) as u
                 left outer join usuarios_sesion g on u.usua_codi=g.usua_codi
              order by u.usua_nombre asc limit 300 offset 0";
 
@@ -113,6 +121,20 @@ if ($lista_usr!="0") {
                 left outer join usuarios_sesion g on l.usua_codi=g.usua_codi
             where u.usua_login not like 'UADM%' order by l.orden asc, u.usua_nombre asc";
 }
+// Documento de periodo jerárquico: el botón "Para" sólo se ofrece a los servidores
+// de la institución que permiten las reglas por nivel del remitente (o de quien
+// elabora); si la regla exige copia, "Para" agrega también esa copia.
+// funciones_NEW.php lo vuelve a validar al guardar.
+include_once(dirname(__DIR__).'/include/periodos/Jerarquia.php');
+$jer_destinos = null;
+$jer_origen = 0;
+if ($lista_usr=="0" && $_SESSION["tipo_usuario"]==1
+    && jerarquia_documento_es_jerarquico($db, $_GET['nurad'] ?? $_POST['nurad'] ?? '')) {
+    $jer_origen = jerarquia_origen_documento($db, $_GET['de'] ?? $_POST['de'] ?? '');
+    if (jerarquia_nivel_usuario($db, $jer_origen) !== null)
+        $jer_destinos = jerarquia_destinos($db, $jer_origen);
+}
+
 //echo 'SQL: >' . $sql . "<";
 if ($sql!="") {
     $rs=$db->query($sql);
@@ -144,7 +166,7 @@ if ($sql!="") {
             $sigla_institucion = "";
 ?>
     <tr onmouseover="this.style.background='#e3e8ec'" onmouseout="this.style.background='white', this.style.color='black'">
-        <td><font size=1><?php  if ($rs->fields["TIPO_USUARIO"]==1) echo "<i>(Serv.)</i>"; else echo "<i>(Ciu.)</i>"; ?></font></td>
+        <td><font size=1><?php  if ($rs->fields["TIPO_USUARIO"]==1) echo "<i>(Serv.)</i>"; elseif ($rs->fields["USUA_ESTA"]==2) echo "<i>(Ciu. pendiente)</i>"; else echo "<i>(Ciu.)</i>"; ?></font></td>
         <td><font size=1><?=substr((string)($rs->fields["USUA_NOMBRE"] ?? ''),0,120).$sigla_institucion ?></font></td>
         <td><font size=1><?=substr((string)($rs->fields["INST_NOMBRE"] ?? ''),0,100) ?></font></td>
         <td><font size=1><?=substr((string)($rs->fields["USUA_TITULO"] ?? ''),0,70) ?></font></td>
@@ -158,7 +180,22 @@ if ($sql!="") {
                 <?php                
 //                if ($ent==2){ //documentos externos no para para ciudadanos                  
 //                    if($rs->fields["TIPO_USUARIO"]==1){?>
+                <?php
+                $jer_interno = ($jer_destinos !== null && $rs->fields["TIPO_USUARIO"]==1
+                                && $inst_codi_doc == $_SESSION["inst_codi"] && (int)$codigo != $jer_origen);
+                if ($jer_interno && !isset($jer_destinos[(int)$codigo])) {
+                    echo "<span title='Documento de periodo jer&aacute;rquico: su nivel no permite enviarle este documento'"
+                        ." style='color:#999'>No permitido</span></font>";
+                } elseif ($jer_interno && !empty($jer_destinos[(int)$codigo]['copias'])) {
+                    $jer_c = $jer_destinos[(int)$codigo]['copias'];
+                    $jer_nombres = jerarquia_nombres($db, $jer_c);
+                    $jer_n = htmlspecialchars($jer_nombres, ENT_QUOTES, 'UTF-8');
+                    $jer_js = htmlspecialchars(json_encode($jer_nombres), ENT_QUOTES, 'UTF-8');
+                    echo "<input class='botones_azul' title='Para (con copia a: $jer_n)' type='button' value='Para'"
+                        ." onClick=\"pasar_con_copia('$codigo','".implode(',', $jer_c)."',$jer_js);\"/></font>";
+                } else { ?>
                 <input class='botones_azul' title='Para' type='button' value='Para' onClick="pasar('<?=$codigo?>','1');"/></font>
+                <?php } ?>
                 <?php //}
                 //}else{//demas documentos ?>
 <!--                <input class='botones_azul' title='Para' type='button' value='Para' onClick="pasar('<?=$codigo?>','1');"></font>-->

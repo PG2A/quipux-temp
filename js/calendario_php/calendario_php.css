@@ -106,3 +106,30 @@
     height: 20px;
     -moz-border-radius:2px; -webkit-border-radius:2px;
 }
+
+/* Contenedor para poner el calendario en línea con otros controles.
+   El span que genera dibujar_calendario() es position:absolute — así el
+   desplegable flota sobre el contenido de abajo — pero eso lo saca del flujo
+   y lo deja con ancho cero: sin este contenedor, lo que venga después se le
+   monta encima. El contenedor le reserva el espacio y le sirve de ancla. */
+.calphp_inline {
+    position: relative;
+    display: inline-block;
+    width: 150px;
+    height: 24px;
+    vertical-align: middle;
+}
+
+/* Etiqueta de un control en línea, alineada con el alto de las cajas. */
+.calphp_etiqueta {
+    vertical-align: middle;
+    margin-left: 18px;
+}
+
+/* Combo de hora: mismo alto que .calphp_fecha para que queden a la misma línea.
+   El margen izquierdo lo separa del calendario, ya que va sin etiqueta propia. */
+.calphp_hora {
+    height: 20px;
+    vertical-align: middle;
+    margin-left: 35px;
+}

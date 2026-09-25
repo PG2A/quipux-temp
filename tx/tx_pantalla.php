@@ -90,7 +90,8 @@ include_once(dirname(__DIR__).'/obtenerdatos.php');
         radi_nume = document.getElementById('txt_tx_radi_nume').value;
         parametros = document.getElementById('txt_tx_parametros').value;
         comentario = document.getElementById('txt_tx_comentario').value;
-        fecha_tarea = document.getElementById('tx_fecha_tramite').value;
+        fecha_tarea = document.getElementById('tx_fecha_tramite').value + ' ' +
+                      document.getElementById('tx_hora_tramite').value;
         reasignar_respuesta = 0;
         try {
             if (document.getElementById('txt_tx_reasignar_respuesta_tarea').checked) reasignar_respuesta = 1;
@@ -101,7 +102,7 @@ include_once(dirname(__DIR__).'/obtenerdatos.php');
                 usuario = tx_obtener_datos_combo ('txt_tx_usua_codi');
 
                 parametros_tx = 'txt_radicados='+radi_nume+'&codTx='+codTx+'&txt_comentario='+comentario+
-                                '&txt_usua_codi='+usuario+'&txt_fecha_tarea='+fecha_tarea+'&'+parametros;
+                                '&txt_usua_codi='+usuario+'&txt_fecha_tarea='+encodeURIComponent(fecha_tarea)+'&'+parametros;
                 break;
             case '31': // Finalizar Tareas
             case '32': // Cancelar Tareas
@@ -112,7 +113,7 @@ include_once(dirname(__DIR__).'/obtenerdatos.php');
             case '34': // Reabrir Tareas
             case '35': // Editar Tareas
                 if (!tx_validar_datos('radicados,comentario,calendario')) return false;
-                parametros_tx = 'txt_radicados='+radi_nume+'&codTx='+codTx+'&txt_comentario='+comentario+'&txt_fecha_tarea='+fecha_tarea+'&'+parametros;
+                parametros_tx = 'txt_radicados='+radi_nume+'&codTx='+codTx+'&txt_comentario='+comentario+'&txt_fecha_tarea='+encodeURIComponent(fecha_tarea)+'&'+parametros;
                 break;
             case '36': // Avance Tareas
                 if (!tx_validar_datos('radicados,comentario')) return false;
@@ -179,7 +180,9 @@ include_once(dirname(__DIR__).'/obtenerdatos.php');
                         if (document.getElementById('txt_tx_radi_nume').value != '0') {
                             document.getElementById('div_tx_btn_aceptar').style.display = '';
                             //fecha maxima de tarea
-                            document.getElementById('tx_fecha_tramite').value = document.getElementById('txt_tx_fecha_maxima_tarea').value;
+                            var topeTarea = document.getElementById('txt_tx_fecha_maxima_tarea').value;
+                            document.getElementById('tx_fecha_tramite').value = topeTarea.substring(0,10);
+                            if (topeTarea.length > 10) tx_fijar_hora(topeTarea.substring(11,16));
                         }
                         break;
                     case "div_tx_realizar_accion":
@@ -316,20 +319,37 @@ include_once(dirname(__DIR__).'/obtenerdatos.php');
 
     }
 
+    // Selecciona una hora en el combo; si no existe como opción, la agrega,
+    // para no perder topes guardados fuera del paso de 30 minutos.
+    function tx_fijar_hora(valor) {
+        var sel = document.getElementById('tx_hora_tramite');
+        if (!sel) return;
+        for (var i = 0; i < sel.options.length; i++)
+            if (sel.options[i].value == valor) { sel.selectedIndex = i; return; }
+        var opt = document.createElement('option');
+        opt.value = valor; opt.text = valor;
+        sel.appendChild(opt);
+        sel.value = valor;
+    }
+
     //Validar si la fecha maxima de tarea seleccionada por el usuario es mayor a la fecha maxima que puede tener
     //fechaMaximaFinal
     function validar_fecha_maxima(fechaMaximaFinal){
         var fechaMaximaTarea = fechaMaximaFinal;
+        // Un tope heredado sin hora se interpreta como el final de ese día; si no,
+        // comparar "2026-09-08 17:00" contra "2026-09-08" lo daría siempre excedido.
+        if (fechaMaximaTarea.length <= 10) fechaMaximaTarea = fechaMaximaTarea.substring(0,10) + ' 23:59';
         //var fechaMaximaTarea = document.getElementById('txt_tx_fecha_maxima_tarea').value;
-        var fechaSeleccionada = document.getElementById('tx_fecha_tramite').value;
+        var fechaSeleccionada = document.getElementById('tx_fecha_tramite').value + ' ' +
+                                document.getElementById('tx_hora_tramite').value;
         var fechavalida = document.getElementById('txt_valida_fecha').value;
         if (fechavalida==1)
         if(<?=(int)$carpeta?> == 15 || <?=(int)$carpeta?> == 16) //Validamos fechas solo si la tarea va a ser creada desde la bandeja de "Tareas Recibidas"
-            if(validarFechas(fechaSeleccionada, fechaMaximaTarea)==2)
-            //if (validarFechas(fechaSeleccionada,fechaMaximaFinal)==2)
+            if (fechaSeleccionada > fechaMaximaTarea)
             {
                 alert('La fecha máxima de tarea no puede ser mayor a: ' + fechaMaximaTarea);
-                document.getElementById('tx_fecha_tramite').value = fechaMaximaTarea;
+                document.getElementById('tx_fecha_tramite').value = fechaMaximaTarea.substring(0,10);
+                if (fechaMaximaTarea.length > 10) tx_fijar_hora(fechaMaximaTarea.substring(11,16));
                 document.getElementById('hidden_bandera_cerrar').value=0;
             }
             else
@@ -397,17 +417,16 @@ include_once(dirname(__DIR__).'/obtenerdatos.php');
                             }
                             else
                                 echo '<input type="hidden" name="txt_valida_fecha" id="txt_valida_fecha" value="1">';
-                            $fechaMaximaFinal = "'".substr(obtenerFechaTareaRadicado($db, $verrad, $_SESSION["usua_codi"]),0,10)."'";
+                            $fechaMaximaFinal = "'".substr(obtenerFechaTareaRadicado($db, $verrad, $_SESSION["usua_codi"]),0,16)."'";
                         }else{
                             $fechaMaximaFinal = "'".date('Y-m-d')."'";
                             
                         }//                      
                         ?>
-                    <b>Fecha M&aacute;xima de Tarea (aaaa-mm-dd): 
-                    </b>
-                    <?  $fechavalida = str_replace("'", "", $fechaMaximaFinal);
-//                   
-                    echo dibujar_calendario("tx_fecha_tramite", date('Y-m-d'), ".", "validar_fecha_maxima($fechaMaximaFinal);") ?>
+                    <?php  $fechavalida = str_replace("'", "", $fechaMaximaFinal); ?>
+                    <b class="calphp_etiqueta" style="margin-left:0">Fecha M&aacute;xima de Tarea (aaaa-mm-dd):</b>
+                    <span class="calphp_inline"><?php echo dibujar_calendario("tx_fecha_tramite", date('Y-m-d'), ".", "validar_fecha_maxima($fechaMaximaFinal);") ?></span>
+                    <?php echo dibujar_combo_hora("tx_hora_tramite", "", "validar_fecha_maxima($fechaMaximaFinal);") ?>
                 </td>
             </tr>
             <tr id="tr_tx_avance_tarea" style="display: none">

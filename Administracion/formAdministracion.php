@@ -106,9 +106,16 @@ echo "<!DOCTYPE html>".html_head();
         if($_SESSION["usua_admin_sistema"]==1 or $_SESSION["usua_perm_ciudadano"]==1)
             echo dibujar_opcion_menu("ciudadanos/cuerpoUsuario_ext.php?accion=2", "Ciudadanos", "Opci&oacute;n para administrar Usuarios Ciudadanos");
 
+        // Solicitudes de alta de ciudadanos desde la búsqueda de destinatarios (RQT-7)
+        if(($_SESSION["perm_aprobar_ciudadano"] ?? 0)==1 or $_SESSION["usua_admin_sistema"]==1)
+            echo dibujar_opcion_menu("ciudadanos_solicitud/aprobacion_ciudadanos.php", "Solicitudes de nuevos ciudadanos", "Aprobar o rechazar los ciudadanos registrados desde la b&uacute;squeda de destinatarios");
+        elseif(($_SESSION["usua_prad_tp1"] ?? 0)==1 or $_SESSION["usua_perm_ciudadano"]==1)
+            echo dibujar_opcion_menu("ciudadanos_solicitud/aprobacion_ciudadanos.php?mias=1", "Mis solicitudes de ciudadanos", "Estado de los ciudadanos que usted ha solicitado registrar");
+
         if($_SESSION["usua_admin_sistema"]==1) {
             echo dibujar_opcion_menu("usuarios/mnuUsuarios.php", "Usuarios internos", "Opci&oacute;n para administrar Usuarios del Sistema de la Instituci&oacute;n Actual");
-            echo dibujar_opcion_menu("dependencias/mnu_dependencias.php", "&Aacute;reas", "Opci&oacute;n para administrar &Aacute;reas de la Instituci&oacute;n");
+            echo dibujar_opcion_menu("dependencias/areas.php", "&Aacute;reas y Puestos", "Opci&oacute;n para administrar &Aacute;reas y Puestos de la Instituci&oacute;n");
+            echo dibujar_opcion_menu("periodos/periodos.php", "Periodos de trabajo", "Opci&oacute;n para definir los periodos y si se trabaja en modo jer&aacute;rquico o lineal");
             echo dibujar_opcion_menu("tbasicas/adm_instituciones.php", "Instituciones", "Opci&oacute;n para administrar Instituciones");            
             echo dibujar_opcion_menu("tbasicas/adm_formato_doc.php", "Numeraci&oacute;n de documentos", "Opci&oacute;n para administrar la numeraci&oacute;n de los documentos");
         }
@@ -132,6 +139,10 @@ echo "<!DOCTYPE html>".html_head();
         
         if ($_SESSION["perm_actualizar_sistema"] == 1) {
             echo dibujar_opcion_menu("archivos/archivos_menu.php", "Administrar repositorio de archivos", "Administra el repositorio para los archivos anexos y generados en Quipux");
+        }
+
+        if($_SESSION["usua_admin_sistema"]==1 or $_SESSION["usua_codi"]==0) {
+            echo dibujar_opcion_menu("catalogos/sumillas_menu.php", "Administraci&oacute;n de Sumillas", "Opci&oacute;n para administrar las sumillas que se ofrecen al reasignar un documento");
         }
         if($_SESSION["usua_admin_sistema"]==1)
             echo dibujar_opcion_menu("membretes/mnu_membretes.php", "Hojas Membretadas", "Opci&oacute;n para administrar las hojas membretadas con las que se generan los documentos");       

@@ -80,11 +80,12 @@ if (isset ($replicacion) && $replicacion && $config_db_replica_info_ver_historic
     <tr>
         <td colspan="4">
             <table  width="100%" align="center" border="0" cellpadding="0" cellspacing="3" class="borde_tab" >
-                <tr><td colspan="7" class="listado1"><b>Acciones realizadas en el Documento.</b></td></tr>
+                <tr><td colspan="8" class="listado1"><b>Acciones realizadas en el Documento.</b></td></tr>
                 <tr align="center">
                     <th><?=$descDependencia?></th>
                     <th>Fecha Hora</th>
                     <th>Acci&oacute;n</th>
+                    <th>Sumilla</th>
                     <th>De</th>
                     <th>Para</th>
                     <th>No. d&iacute;as</th>
@@ -105,8 +106,34 @@ if (isset ($replicacion) && $replicacion && $config_db_replica_info_ver_historic
 //    if (ObtenerCampoRadicado("radi_leido",$verrad,$db) == 0)
     $sqlFecha = "substr(h.hist_fech::text,1,19)"; //$db->conn->SQLDate("Y-m-d H:i A","h.hist_fech");
     $descZonaHoraria = $descZonaHoraria ?? "";
+
+    // Persona real detrás de cada evento cuando el trámite lo hizo un subrogante.
+    // El histórico atribuye la acción al CARGO, que es lo correcto de cara al
+    // documento; esta columna recupera quién la ejecutó materialmente.
+    // Sólo se consulta si el módulo de subrogación ya está desplegado, para no
+    // romper el recorrido en instalaciones sin ese esquema.
+    $col_subrogante = "null as subrogante_real";
+    $rs_tabla = $db->conn->query("select to_regclass('subrogacion_auditoria') as tabla");
+    if ($rs_tabla && !$rs_tabla->EOF && trim($rs_tabla->fields["TABLA"] ?? '') != '') {
+        $col_subrogante = "(select us.usua_nomb || ' ' || us.usua_apellido
+                              from subrogacion_auditoria a
+                              join usuarios us on us.usua_codi = a.usua_codi_real
+                             where a.radi_nume_radi     = h.radi_nume_radi
+                               and a.usua_codi_actuando = h.usua_codi_ori
+                               and a.accion             = 'TX_' || h.sgd_ttr_codigo
+                             order by abs(extract(epoch from (a.fecha_hora - h.hist_fech)))
+                             limit 1) as subrogante_real";
+    }
+
+    // Sumillas registradas en cada evento. Se consulta por el fragmento en vez de
+    // fijo, para no romper el recorrido donde aún no se desplegó la tabla.
+    include_once(__DIR__.'/include/sumillas/Sumillas.php');
+    $col_sumillas = sumillas_columna_historico($db, "h");
+
     $isql = "select -- Ver Historico
                 $sqlFecha || '$descZonaHoraria' as hist_fech1
+                , $col_subrogante
+                , $col_sumillas
                 , ver_usuarios(usua_codi_ori::text,',') as usua_ori
                 , (select depe_nomb from usuario where usua_codi=usua_codi_ori) as depe_nomb
                 , ver_usuarios(usua_codi_dest::text,',') as usua_dest
@@ -147,7 +174,20 @@ if (isset ($replicacion) && $replicacion && $config_db_replica_info_ver_historic
                 <td><?=$rs->fields["DEPE_NOMB"]?></td>
                 <td><?=$rs->fields["HIST_FECH1"]?></td>
                 <td><?=$rs->fields["SGD_TTR_DESCRIP"]?></td>
-                <td><?php echo $usua_ori; //if ($autoReasignado == $condicionAR) echo $usua_dest; else echo $usua_ori;?></td>
+                <td><?php
+                    // Texto tal como estaba al aplicarse: si la sumilla se renombró
+                    // o se retiró del catálogo, la hoja de ruta no cambia.
+                    $sumillas = trim($rs->fields["SUMILLAS"] ?? '');
+                    echo ($sumillas != '') ? htmlspecialchars($sumillas) : '&nbsp;';
+                ?></td>
+                <td><?php
+                    echo $usua_ori; //if ($autoReasignado == $condicionAR) echo $usua_dest; else echo $usua_ori;
+                    // Deja constancia visible de quién actuó cuando el puesto estaba subrogado.
+                    $subrogante_real = trim($rs->fields["SUBROGANTE_REAL"] ?? '');
+                    if ($subrogante_real != '')
+                        echo '<br><span style="color:#a05000; font-style:italic;" title="Ejecutado por el subrogante del puesto">'
+                           . 'por ' . htmlspecialchars($subrogante_real) . ' (en subrogaci&oacute;n)</span>';
+                ?></td>
                 <td><?php if ($usua_ori != $usua_dest) echo $usua_dest?></td>
                 <td><?=$rs->fields["TOT_DIAS"]?></td>
                 <?php /* if ($nivel_seguridad_documento >= 2) echo "<td>$observacion</td>"; */?>

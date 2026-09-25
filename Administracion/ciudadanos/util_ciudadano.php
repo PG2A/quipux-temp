@@ -70,6 +70,74 @@ class Ciudadano {
         return $this->db->Execute($sql);
     }
 
+    /**
+     * Busca una cuenta ACTIVA (funcionario o ciudadano) con la cédula indicada en
+     * la tabla unificada 'usuario'. Sirve para impedir ciudadanos duplicados y para
+     * avisar cuando la persona ya existe como servidor público.
+     *
+     * @param string $cedula          Cédula a verificar
+     * @param int    $excluir_codigo  usua_codi a ignorar (el propio registro al editar)
+     * @return array|null  ['usua_codi','tipo_usuario','nombre','institucion','cargo'] o null si no existe
+     */
+    function cuentaExistentePorCedula($cedula, $excluir_codigo = 0) {
+        $cedula = trim((string)$cedula);
+        // Las cédulas automáticas (99999...) se generan a partir del código y no
+        // pueden repetirse; no hay nada que validar.
+        if ($cedula == '' || substr($cedula, 0, 2) == '99') return null;
+        // usua_esta 2 = ciudadano pendiente de aprobación (RQT-7): también bloquea.
+        $sql = "select usua_codi, tipo_usuario, usua_nombre, inst_nombre, usua_cargo, usua_esta
+                  from usuario
+                 where usua_cedula = " . $this->db->qstr($cedula) . "
+                   and usua_esta in (1, 2)
+                   and usua_codi <> " . (int)$excluir_codigo . "
+                 order by tipo_usuario asc, usua_codi asc";
+        $rs = $this->execQuery($sql);
+        if (!$rs || $rs->EOF) return null;
+        return array(
+            'usua_codi'    => (int)$rs->fields['USUA_CODI'],
+            'tipo_usuario' => (int)$rs->fields['TIPO_USUARIO'],
+            'nombre'       => trim((string)$rs->fields['USUA_NOMBRE']),
+            'institucion'  => trim((string)$rs->fields['INST_NOMBRE']),
+            'cargo'        => trim((string)$rs->fields['USUA_CARGO']),
+            'estado'       => (int)$rs->fields['USUA_ESTA'],
+        );
+    }
+
+    /**
+     * Clave inicial de un ciudadano: su cédula; si se registró sin cédula, el
+     * documento que haya indicado; y en último caso el número automático con el
+     * que inicia sesión. Se comunica en el correo de datos y el sistema obliga a
+     * cambiarla en el primer ingreso (ver login.php y rec_session.php).
+     */
+    function claveInicial($cedula, $documento, $login_cedula) {
+        $cedula = trim((string)$cedula);
+        if ($cedula != '' && substr($cedula, 0, 2) != '99') return $cedula;
+        $documento = trim((string)$documento);
+        if ($documento != '') return $documento;
+        return trim((string)$login_cedula);
+    }
+
+    /**
+     * Texto del aviso cuando cuentaExistentePorCedula() encontró una cuenta.
+     */
+    function mensajeCuentaExistente($cuenta, $cedula) {
+        $cedula = htmlspecialchars((string)$cedula);
+        $nombre = htmlspecialchars($cuenta['nombre']);
+        $inst   = htmlspecialchars($cuenta['institucion']);
+        if ($cuenta['tipo_usuario'] == 2 && ($cuenta['estado'] ?? 1) == 2) {
+            return "La c&eacute;dula <b>$cedula</b> ya tiene una solicitud de alta <b>pendiente de aprobaci&oacute;n</b> "
+                 . "(<b>$nombre</b>). Espere a que se resuelva o comun&iacute;quese con el aprobador.";
+        }
+        if ($cuenta['tipo_usuario'] == 1) {
+            return "La c&eacute;dula <b>$cedula</b> ya pertenece al servidor p&uacute;blico <b>$nombre</b>"
+                 . ($inst != '' ? " ($inst)" : "") . ". No es posible registrarla como ciudadano; "
+                 . "seleccione al funcionario existente.";
+        }
+        return "Ya existe un ciudadano registrado con la c&eacute;dula <b>$cedula</b>: <b>$nombre</b>"
+             . ($inst != '' ? " ($inst)" : "") . ". No se permite crear ciudadanos duplicados; "
+             . "utilice o edite el registro existente.";
+    }
+
     /**********************************************************************************
     ** Funcion consultar ciudadano en tabla temporal    
     ***********************************************************************************/

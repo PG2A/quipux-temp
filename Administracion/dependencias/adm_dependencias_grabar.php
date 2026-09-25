@@ -101,7 +101,7 @@ if ($error!="") $mensaje = "Error al crear o modificar el ".$_SESSION["descDepen
 
 //guardar dependencia en administracion
 $depe_codi_admin = obtenerAreasAdmin($_SESSION["usua_codi"],$_SESSION["inst_codi"],$_SESSION["usua_admin_sistema"],$db);
-if ($depe_codi_admin!=0)
+if (!empty($depe_codi_admin))
     grabar_instancia($txtIdDep,$_SESSION['usua_codi'],$_SESSION['usua_codi'],$record['depe_codi_padre'],$_SESSION['inst_codi'],$db,1);
 
 include_once(dirname(__DIR__, 2).'/funciones_interfaz.php');

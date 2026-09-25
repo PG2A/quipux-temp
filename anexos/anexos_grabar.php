@@ -57,7 +57,8 @@ for ($file=0 ; $file<10 ; ++$file ) {
         $medio_almacenamiento = 0 + $_POST["chk_medio_nuevo_$file"];
         $asociar_imagen = (isset ($_POST["chk_asociar_imagen_$file"])) ? (0 + $_POST["chk_asociar_imagen_$file"]) : 0;
 
-        $archivo_path = limpiar_sql($_FILES["fil_archivo_nuevo_$file"]["tmp_name"]);
+        // Ruta temporal generada por PHP: NO se sanitiza, en Windows contiene "\" y limpiar_sql los elimina
+        $archivo_path = $_FILES["fil_archivo_nuevo_$file"]["tmp_name"];
         $archivo_tamanio = 0+$_FILES["fil_archivo_nuevo_$file"]["size"];
         $archivo_nombre = trim(limpiar_sql($_FILES["fil_archivo_nuevo_$file"]["name"]));
 
@@ -105,9 +106,13 @@ for ($file=0 ; $file<10 ; ++$file ) {
         if (!is_dir($dir_path)) {
             mkdir($dir_path, 0777, true);
         }
-        $nuevo_nombre_archivo = $archivo_codigo . "_" . $archivo_nombre;
-        if (!copy($archivo_path, $dir_path . $nuevo_nombre_archivo)) {
-            echo "<script>alert('No se pudo copiar el archivo al repositorio físico.');</script>";
+        // Se limpian los caracteres no válidos para un nombre de archivo en disco (Windows/Linux).
+        // El nombre original se conserva intacto en ANEX_NOMBRE.
+        $archivo_nombre_disco = preg_replace('/[\\\\\/:*?"<>|]/', "_", $archivo_nombre);
+        $nuevo_nombre_archivo = $archivo_codigo . "_" . $archivo_nombre_disco;
+        if (!is_uploaded_file($archivo_path) or !copy($archivo_path, $dir_path . $nuevo_nombre_archivo)) {
+            error_log("QUIPUX anexos: no se pudo copiar '$archivo_path' a '".$dir_path.$nuevo_nombre_archivo."'");
+            echo "<script>alert('No se pudo copiar el archivo \"$archivo_nombre\" al repositorio de archivos del servidor.');</script>";
             continue;
         }
         $archivo_base64 = base64_encode(file_get_contents($archivo_path)); // Requerido para verificación de firma si aplica
@@ -119,7 +124,7 @@ for ($file=0 ; $file<10 ; ++$file ) {
         if ($flag_firma) {
             $firma = verificar_firma_archivo($archivo_base64);
             if ($firma["flag"] == 1) {
-                $archivo_nombre_sin_firma = str_ireplace(".p7m", "", $archivo_nombre);
+                $archivo_nombre_sin_firma = str_ireplace(".p7m", "", $archivo_nombre_disco);
                 $nuevo_nombre_archivo_sin = $archivo_codigo . "_" . $archivo_nombre_sin_firma;
                 if (file_put_contents($dir_path . $nuevo_nombre_archivo_sin, base64_decode($firma["archivo"]))) {
                     $archivo_datos_firma = $firma["datos_firma"];

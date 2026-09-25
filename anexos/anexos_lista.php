@@ -61,6 +61,10 @@ if (substr($radi_nume,-1)=="1") {
     }
 }
 
+// Extensiones que el navegador puede mostrar en la vista previa.
+// Se valida por extensión y no por anex_tipo porque los códigos de anexos_tipo varían entre instalaciones.
+$extensiones_vista_previa = array("pdf","png","jpg","jpeg","gif","bmp","webp","txt");
+
 // Consulto los archivos anexos
 $sql = "select anex_codigo, anex_nombre, anex_desc, anex_path
             , anex_tamano, ver_usuarios(anex_usua_codi::text, '') as usua_nombre, anex_usua_codi
@@ -110,7 +114,11 @@ while($rs && !$rs->EOF) {
         $anex_descargar_img = "<img src='$nombre_servidor/imagenes/document_down.jpg' alt='Descargar' title='Descargar Archivo'
                             style='width: 26px; height: 22px;' onclick=\"anexos_descargar_archivo('$radi_nume','$anex_codigo',$anex_tipo)\">";
 
-        if (in_array($rs->fields["ANEX_TIPO"], array(4,5,6,7,8,17))){ //Si es pdf, imagen o txt
+        // Extensión real del archivo; en los firmados (.pdf.p7m) se toma la del documento contenido
+        $anex_nombre_base = preg_replace('/\.p7m$/', '', $anex_nombre);
+        $anex_extension = (strrpos($anex_nombre_base, ".") === false) ? "" : substr($anex_nombre_base, 1+strrpos($anex_nombre_base, "."));
+
+        if (in_array($anex_extension, $extensiones_vista_previa)){ //Si es pdf, imagen o txt
             $anex_vista_previa_img = "<img src='$nombre_servidor/iconos/vista_previa.jpg' alt='Descargar' title='Vista Previa'
                                 style='width: 26px; height: 22px;' onclick=\"anexos_descargar_archivo('$radi_nume','$anex_codigo',0,'embeded')\">";
         }
@@ -239,6 +247,15 @@ while($rs && !$rs->EOF) {
 if ($lista_anexos_antes == "" && $lista_anexos_despues == "")
     echo crear_tabla_anexos("<tr><td colspan='5'>El documento no tiene archivos anexos.</td></tr>", "Archivos anexos al documento");
 else {
+    // Descarga de todos los anexos en un único archivo comprimido
+    if ($nivel_seguridad_documento >= 2)
+        echo "<div style='text-align: right; padding-bottom: 5px;'>
+                <a href='javascript:;' class='vinculos' title='Descarga todos los archivos anexos en un archivo ZIP'
+                   onclick=\"anexos_descargar_zip('$radi_nume')\"><img src='$nombre_servidor/imagenes/document_down.jpg'
+                   alt='' border='0' style='width: 26px; height: 22px; vertical-align: middle;'>&nbsp;Descargar todos los anexos (ZIP)</a>
+                &nbsp;&nbsp;
+              </div>";
+
     if ($lista_anexos_antes != "")
         echo crear_tabla_anexos($lista_anexos_antes, "Archivos anexos al documento");
     if ($lista_anexos_despues != "")

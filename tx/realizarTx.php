@@ -58,6 +58,10 @@ echo "<!DOCTYPE html>".html_head();
     $chk_firma = $_POST['chk_firma'] ?? '';
     $codTx = $_POST['codTx'] ?? '';
     $observa = $_POST['observa'] ?? '';
+    // Sumillas marcadas en el árbol; Historico::insertarHistorico() las recoge y
+    // las cuelga del evento que registre, para que salgan en la hoja de ruta.
+    include_once(dirname(__DIR__).'/include/sumillas/Sumillas.php');
+    sumillas_fijar_seleccion($_POST['txt_sumillas'] ?? '');
     $fechaAgenda= $_POST['fechaAgenda'] ?? '';
     $checkValue = $_POST['checkValue'] ?? null;
     $fecha_doc = $_POST['fecha_doc'] ?? '';
@@ -260,8 +264,33 @@ switch ($codTx)
             // Cast defensivo, igual que en Enviar Fisico (case 69). Sin el, un combo que
             // llegue vacio se propagaba hasta el UPDATE de reasignar() y lo rompia.
             $usua_dest = (int)($_POST['usCodSelect'] ?? 0);
+
+            // Documentos de periodo jerárquico: el destino debe estar permitido por
+            // las reglas por nivel y, si la regla lo exige, se informa en copia al
+            // jefe / nivel intermedio. Sin nivel en el puesto rigen las reglas de siempre.
+            include_once(dirname(__DIR__).'/include/periodos/Jerarquia.php');
+            $jer_copias = array();
+            // Incluye los antecedentes si también se van a reasignar.
+            $jer_docs = jerarquia_filtrar_jerarquicos($db,
+                array_merge($radicadosSel, ($chk_reasigna_padre == "true") ? array_filter($radiNumeAsoc) : array()));
+            if (!empty($jer_docs) && jerarquia_nivel_usuario($db, $_SESSION["usua_codi"]) !== null) {
+                $jer_destinos = jerarquia_destinos($db, $_SESSION["usua_codi"]);
+                if (!isset($jer_destinos[(int)$usua_dest])) {
+                    die("<br/><center><span style='color: red; font-weight: bold;'>No se reasign&oacute; ning&uacute;n documento: "
+                        ."el usuario elegido no est&aacute; permitido para documentos de periodo jer&aacute;rquico seg&uacute;n su nivel."
+                        ."</span><br/><br/><input type='button' value='Regresar' class='botones' onclick='history.back();'></center></body></html>");
+                }
+                $jer_copias = array_diff($jer_destinos[(int)$usua_dest]['copias'], array((int)$usua_dest, (int)$_SESSION["usua_codi"]));
+                $jer_regla = $GLOBALS['JERARQUIA_REGLAS'][$jer_destinos[(int)$usua_dest]['regla']] ?? '';
+            }
             //$observa .= "<br>Fecha máxima de trámite: ".$fecha_max_tram;
             $usCodDestino = $tx->reasignar( $radicadosSel, $_SESSION["usua_codi"], $usua_dest, $observa, $fecha_max_tram, false, $carpeta);
+            if ($usCodDestino != "" && !empty($jer_copias)) {
+                $obs_copia = "Copia por reasignación jerárquica ($jer_regla). ".$observa;
+                foreach ($jer_copias as $usua_copia)
+                    $tx->informar($jer_docs, $_SESSION["usua_codi"], $usua_copia, $obs_copia);
+                $MensajeTx .= "<br>Se inform&oacute; en copia a: ".jerarquia_nombres($db, $jer_copias).".";
+            }
             if($chk_reasigna_padre == "true"){
                 //Se consulta los documentos padre
                 foreach($radiNumeAsoc as $radi_nume) {

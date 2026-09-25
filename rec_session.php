@@ -104,9 +104,17 @@ try {
     // Obtener datos de sesión de la BD
     $usua_codi = (int)$_SESSION['usua_codi'];
     $session_id = session_id();
-    
-    $query = "SELECT * FROM usuarios_sesion 
-              WHERE usua_codi = $usua_codi 
+
+    // La fila de usuarios_sesion pertenece a la PERSONA autenticada, no al cargo
+    // bajo el que esté actuando: mientras un subrogante opera con la identidad
+    // del puesto, usua_codi es la del titular, y validar contra ella expulsaría
+    // al titular (usuarios_sesion admite una sola fila por usua_codi).
+    // Las sesiones anteriores al despliegue no traen usua_codi_sesion; en ese
+    // caso se recurre a usua_codi, que para ellas es equivalente.
+    $usua_codi_sesion = (int)($_SESSION['usua_codi_sesion'] ?? $usua_codi);
+
+    $query = "SELECT * FROM usuarios_sesion
+              WHERE usua_codi = $usua_codi_sesion
               AND usua_sesion = '$session_id'
               LIMIT 1";
     
@@ -139,8 +147,8 @@ try {
             error_log("ERROR: Sesión expirada por timeout para usuario " . $_SESSION['krd']);
             
             // Eliminar sesión de BD
-            $delete_query = "DELETE FROM usuarios_sesion 
-                            WHERE usua_codi = $usua_codi 
+            $delete_query = "DELETE FROM usuarios_sesion
+                            WHERE usua_codi = $usua_codi_sesion
                             AND usua_sesion = '$session_id'";
             $db->conn->Execute($delete_query);
             
@@ -162,8 +170,29 @@ try {
     // ============================================
     // 6. ACTUALIZAR HORA DE SESIÓN
     // ============================================
-    
+
     $_SESSION['hora_session'] = time();
+
+    // ============================================
+    // 6b. CAMBIO DE CONTRASEÑA OBLIGATORIO
+    // ============================================
+    // login.php marca forzar_cambio_clave cuando un ciudadano entra con su clave
+    // inicial (cédula/documento). Hasta que la cambie, solo puede usar la pantalla
+    // de cambio de contraseña o cerrar sesión.
+    if (!empty($_SESSION['forzar_cambio_clave'])) {
+        $script_actual = basename((string)($_SERVER['SCRIPT_FILENAME'] ?? $_SERVER['PHP_SELF'] ?? ''));
+        $permitidos = array('cambiar_password.php', 'cambiar_password_grabar.php', 'cerrar_session.php');
+        if (!in_array($script_actual, $permitidos)) {
+            // Ruta web de la raíz del sistema, calculada a partir de la ruta física
+            // del script que se está ejecutando (sirve tanto en / como en /quipux).
+            $rel_script = str_replace('\\', '/', substr((string)realpath($_SERVER['SCRIPT_FILENAME']), strlen((string)realpath(__DIR__))));
+            $script_name = (string)($_SERVER['SCRIPT_NAME'] ?? '');
+            $web_root = (substr($script_name, -strlen($rel_script)) === $rel_script)
+                      ? substr($script_name, 0, strlen($script_name) - strlen($rel_script)) : '';
+            header("Location: $web_root/Administracion/usuarios/cambiar_password.php?forzar=1");
+            die();
+        }
+    }
     
     // ============================================
     // 7. ESTABLECER VARIABLES GLOBALES (COMPATIBILIDAD)

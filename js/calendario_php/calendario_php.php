@@ -19,6 +19,37 @@
 
 /*  FUNCION PARA CREAR EL CALENDARIO */
 
+/**
+ * Combo de hora en pasos de 30 minutos, para acompañar a dibujar_calendario()
+ * cuando el dato que se captura es un instante y no solo un día.
+ *
+ * @param string $objeto      id/name del <select>
+ * @param string $hora        hora actual en formato "HH:MM"
+ * @param string $accion      JS a ejecutar en el onchange
+ * @param string $por_defecto hora a preseleccionar si $hora viene vacía
+ */
+function dibujar_combo_hora($objeto, $hora = "", $accion = "", $por_defecto = "17:00") {
+    $hora = substr(trim((string)$hora), 0, 5);
+    if (!preg_match('/^\d{2}:\d{2}$/', $hora)) $hora = $por_defecto;
+
+    $opciones = array();
+    for ($h = 0; $h < 24; ++$h)
+        foreach (array("00", "30") as $m) $opciones[] = sprintf("%02d", $h) . ":" . $m;
+
+    // Una tarea guardada con una hora que no cae en el paso de 30 minutos debe
+    // seguir viéndose tal cual, no redondearse en silencio al abrir la pantalla.
+    if (!in_array($hora, $opciones)) {
+        $opciones[] = $hora;
+        sort($opciones);
+    }
+
+    $onchange = ($accion != "") ? " onchange=\"$accion\"" : "";
+    $html = "<select name='$objeto' id='$objeto' class='calphp_combos calphp_hora'$onchange>";
+    foreach ($opciones as $v)
+        $html .= "<option value='$v'" . ($v == $hora ? " selected" : "") . ">$v</option>";
+    return $html . "</select>";
+}
+
 function dibujar_calendario($objeto, $fecha, $ruta_raiz=".", $accion = "") {
     $anio_desde = "2008";
     $anio_hasta = date('Y')+1;

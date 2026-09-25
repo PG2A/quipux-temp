@@ -126,8 +126,13 @@ echo "<!DOCTYPE html>".html_head();
                   $color="#F7BE81";
                   $inactivo = "(Inactivo)";
               }
+              elseif ($usr["usua_estado"]==2){ // ciudadano pendiente de aprobación (RQT-7)
+                  $color="#FCE9B6";
+                  $inactivo = "(Pendiente de aprobaci&oacute;n)";
+                  $usr["nombre"] = strip_tags($usr["nombre"]);
+              }
               else{ $color="";
-              $inactivo = "";              
+              $inactivo = "";
               }
                if (($lista_destino!='' || $documento_us1!='') and ($j==0 || $j==2)){
                if ($usuarios_eliminados!='')//pintar eliminados de lista

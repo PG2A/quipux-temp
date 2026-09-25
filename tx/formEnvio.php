@@ -56,8 +56,10 @@ if(trim($carpeta) == "")
 
 $mensaje_error = "";
 //$db = new ConnectionHandler(__DIR__,"busqueda");
+include_once(dirname(__DIR__).'/include/sumillas/Sumillas.php'); // Árbol de sumillas por motivo
 include_once(dirname(__DIR__).'/obtenerdatos.php');
 include_once(dirname(__DIR__).'/seguridad_documentos.php'); // Valida estados de los documentos y otras reglas dependiendo de la transacción realizada
+include_once(dirname(__DIR__).'/include/periodos/Jerarquia.php'); // Reglas de reasignación de periodo jerárquico
 $mensaje_error = "";
 $mensaje_error = "";
 $whereFiltro= "0";
@@ -132,40 +134,11 @@ require_once dirname(__DIR__)."/js/ajax.js";
 ?>
 <script type="text/javascript" language="JavaScript" src="../Administracion/ciudadanos/adm_ciudadanos.js"></script>
 <script type="text/javascript" language="JavaScript" src="../js/shortcut.js"></script>
+<?php echo sumillas_javascript(); ?>
 <script type="text/javascript">
-    var cont = new Array (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
-    function selOperacion(fin,init){
-        var listIdex=0;
-        var escribe=false;
-
-        for(i=0;i<document.getElementById('Accion').options.length;i++){
-            if(document.getElementById('Accion').options[i].selected && document.getElementById('Accion').options[i].value!='0'){
-                //Almacena
-                listIdex=document.getElementById('Accion').options[i].value;
-                
-
-                for (j=init;j<=fin;j++){//1;27
-                    if  (cont[j]==listIdex){
-                        //alert('repetido');
-                        escribe=true;
-                    }else{
-                        //alert('no repetido')
-                        if (j==listIdex)
-                            cont[document.getElementById('Accion').options[i].value]=listIdex;
-                          //  alert(cont[j]);
-                    }
-                }
-             if (escribe==false)
-                 document.realizarTx.observa.value+="*" +document.getElementById('Accion').options[i].text + " ";
-                 
-            }
-        }
-        formEnvio_contador_caracteres();
-    }
-
     function borrarCaja(){
         document.realizarTx.observa.value="";
-        cont = new Array (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+        sumillas_limpiar();
         formEnvio_contador_caracteres();
     }
 
@@ -365,9 +338,24 @@ var var_ejecutar_okTx = true;
         }
     }
             if (area != '')
-                nuevoAjax('mnu_usr', 'GET', 'formEnvio_ajax.php', 'area='+area+'&codTx=<?=$codTx?>');
+                nuevoAjax('mnu_usr', 'GET', 'formEnvio_ajax.php', 'area='+area+'&codTx=<?=$codTx?>' + (jerarquia_copias ? '&jer=1' : ''));
+            jerarquia_mostrar_copia();
             return;
    }
+
+        // Periodo jerárquico: regla aplicada y usuarios que recibirán copia (informados)
+        // según el destinatario elegido. null si no aplica; se llena junto al combo de reasignar.
+        var jerarquia_copias = null;
+        function jerarquia_mostrar_copia() {
+            var div = document.getElementById('div_jerarquia_copia');
+            if (!div || !jerarquia_copias) return;
+            var sel = document.getElementById('usCodSelect');
+            var d = sel ? jerarquia_copias[sel.value] : null;
+            if (!d) { div.innerHTML = ''; return; }
+            var txt = 'Regla: ' + d.regla + '.';
+            if (d.copias != '') txt += ' <b>Se informar&aacute; en copia a: ' + d.copias + '</b>';
+            div.innerHTML = txt;
+        }
 
         function Start(URL,ci) {
             var x = (screen.width - 1100) / 2;
@@ -623,6 +611,34 @@ $usrPermiso = $_SESSION['usua_perm_email_all'] ?? 0;//= ObtenerPermisoUsuario($_
         $sql=utilSqlSubrogacion($_SESSION["depe_codi"]);
         $rs_usr = $db->conn->Execute($sql);
     }
+
+    // Documentos de periodo jerárquico: si quien reasigna tiene nivel en su puesto,
+    // las áreas y usuarios ofrecidos son sólo los que permiten las reglas por nivel
+    // (jerarquia_destinos). realizarTx.php lo vuelve a validar al grabar.
+    $jer_activo = false;
+    $jer_destinos = array();
+    $jer_nivel = null;
+    if ($codTx == 9 && jerarquia_hay_documentos_jerarquicos($db, $whereFiltro)) {
+        $jer_nivel = jerarquia_nivel_usuario($db, $_SESSION["usua_codi"]);
+        if ($jer_nivel !== null) {
+            $jer_activo = true;
+            $jer_destinos = jerarquia_destinos($db, $_SESSION["usua_codi"]);
+            $jer_areas = array();
+            foreach ($jer_destinos as $d) $jer_areas[$d['depe_codi']] = 1;
+            $jer_areas = implode(',', array_keys($jer_areas));
+            $rs_area = $db->query("select depe_ruta(depe_codi) as depe_nomb, depe_codi from dependencia
+                                    where depe_codi in (".($jer_areas == '' ? '0' : $jer_areas).") order by 1");
+            // Área inicial: la propia si tiene destinos; si no, la primera disponible.
+            $jer_area_ini = isset(array_flip(explode(',', $jer_areas))[$_SESSION["depe_codi"]])
+                          ? $_SESSION["depe_codi"] : (int)explode(',', $jer_areas)[0];
+            // Para cada destino, a quién se informará en copia (se muestra al elegirlo).
+            $jer_copias_js = array();
+            foreach ($jer_destinos as $u => $d) {
+                $jer_copias_js[$u] = array('regla' => $GLOBALS['JERARQUIA_REGLAS'][$d['regla']] ?? $d['regla'],
+                                           'copias' => jerarquia_nombres($db, $d['copias']));
+            }
+        }
+    }
 $accion = "";
 switch ($codTx)
 {
@@ -677,10 +693,24 @@ switch ($codTx)
             else
                 $codi_usuario = 0;
             $menu_usr  = $rs_usr->GetMenu2("usCodSelect", $codi_usuario, "0:&lt;&lt; Seleccione Usuario &gt;&gt;", false,0," id='usCodSelect' class='select'" );
+            $aviso_jer = "";
+            if ($jer_activo) {
+                $menu_area = $rs_area->GetMenu2('depsel', $jer_area_ini, false, false, 0,
+                                                " id='depsel' class='select' onChange='cambiar_combo_usuarios()' ");
+                $menu_usr  = jerarquia_combo_usuarios($jer_destinos, $jer_area_ini, $codi_usuario);
+                $aviso_jer = "<tr class='listado2'><td colspan='3'><b>Documento de periodo jer&aacute;rquico.</b>
+                              Usted es nivel $jer_nivel: s&oacute;lo se muestran los usuarios a los que puede reasignar seg&uacute;n su nivel.
+                              <div id='div_jerarquia_copia' style='margin-top:4px;'></div>
+                              <script type='text/javascript'>jerarquia_copias = "
+                              .json_encode((object)$jer_copias_js, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)
+                              .";</script></td></tr>";
+                if (empty($jer_destinos))
+                    $aviso_jer .= "<tr class='listado2'><td colspan='3'><span style='color:red'>No hay usuarios a los que pueda reasignar este documento.</span></td></tr>";
+            }
             $accion = "<table width='100%' border='0' cellspacing='1'>";
             $accion .= "<tr class='titulos4'><td>Acci&oacute;n:</td><td>Área:</td><td>Usuario:</td></tr>";
             $accion .= "<tr class='listado1'><td valign='top'>Reasignar Documentos</td><td>$menu_area</td><td>
-                        <div name='mnu_usr' id='mnu_usr'>$menu_usr</div></td><tr></table>";
+                        <div name='mnu_usr' id='mnu_usr'>$menu_usr</div></td><tr>$aviso_jer</table>";
                 break;
         case 11:
             
@@ -853,36 +883,17 @@ if ($codTx==9){
     $rs1=$db->query($sql); /* */
     if($_SESSION["perm_acti_accion"]==1){
 
-            //while(!$rs1->EOF){
-            //Cargo acción de documentos para FFAA, se aplica en reenviados
-            $sql_accion = "select accion_nombre,accion_codi,inst_codi from accion where inst_codi=".$_SESSION['inst_codi']." order by accion_codi";
-            
-            $rs_accion = $db->conn->Execute($sql_accion);
-            //Verifico existencia de inf
-            while(!$rs_accion->EOF) {
-                //$acc=$rs_accion->fields["ACCION_CODI"];
-                $rs_accion->MoveNext();
-                $contAcc+=1;
-            }
-
-            if($contAcc > 1){
-                $sqlMin="select min(accion_codi) as init ,max(accion_codi) as Fin from accion where inst_codi=".$_SESSION['inst_codi'];
-                $rs_min= $db->conn->Execute($sqlMin);
-                $inicio=$rs_min->fields["INIT"];
-                $final=$rs_min->fields["FIN"];
-            }
-
-            $rs_accion = $db->conn->Execute($sql_accion);
-
-            if($contAcc > 1){
-                $menu_accion  = $rs_accion->GetMenu2("Accion[]", 0, false, false,25," id='Accion' class='select' size =10 onclick='selOperacion($final,$inicio);'");
-            }?>
+            // Sumillas de la institución, clasificadas por el motivo por el que se
+            // emiten. $contAcc son las hojas activas: las categorías agrupan pero
+            // no se pueden marcar, así que no cuentan como opciones disponibles.
+            $contAcc     = sumillas_contar_seleccionables($db, $_SESSION['inst_codi']);
+            $menu_accion = ($contAcc > 1) ? sumillas_dibujar_arbol($db, $_SESSION['inst_codi']) : "";?>
     <?php  if($contAcc > 1){?>
         <table border="1" align="center" width="100%">
         <tr>
-            <td WIDTH=5%>Operaciones:</td>
-            <td WIDTH=15%> <b></b><?php echo $menu_accion;?></td>
-            <td WIDTH=80% align='center' valign='middle'>
+            <td WIDTH=5% valign='top' class='titulos2'>Sumilla:</td>
+            <td WIDTH=28% valign='top'><?php echo $menu_accion;?></td>
+            <td WIDTH=67% align='center' valign='middle'>
                 <b>Comentario: &nbsp;</b>
             <textarea id="observa" name=observa cols=70 rows=3 class=ecajasfecha onkeypress="return limita(event);"></textarea>            
             <span id="spn_numero_caracteres_disponibles"></span>
@@ -990,30 +1001,11 @@ elseif ($codTx!=9){
             //Datos de acciones
             if($_SESSION["perm_acti_accion"]==1){
 
-            //while(!$rs1->EOF){
-            //Cargo acción de documentos para FFAA, se aplica en reenviados
-            $sql_accion = "select accion_nombre,accion_codi,inst_codi from accion where inst_codi=".$_SESSION['inst_codi']." order by accion_codi";
-            
-            $rs_accion = $db->conn->Execute($sql_accion);
-            //Verifico existencia de inf
-            while(!$rs_accion->EOF) {
-                //$acc=$rs_accion->fields["ACCION_CODI"];
-                $rs_accion->MoveNext();
-                $contAcc+=1;
-            }
-
-            if($contAcc > 1){
-                $sqlMin="select min(accion_codi) as init ,max(accion_codi) as Fin from accion where inst_codi=".$_SESSION['inst_codi'];
-                $rs_min= $db->conn->Execute($sqlMin);
-                $inicio=$rs_min->fields["INIT"];
-                $final=$rs_min->fields["FIN"];
-            }
-
-            $rs_accion = $db->conn->Execute($sql_accion);
-
-            if($contAcc > 1){
-                $menu_accion  = $rs_accion->GetMenu2("Accion[]", 0, false, false,25," id='Accion' class='select' size =10 onclick='selOperacion($final,$inicio);'");
-            }
+            // Sumillas de la institución, clasificadas por el motivo por el que se
+            // emiten. $contAcc son las hojas activas: las categorías agrupan pero
+            // no se pueden marcar, así que no cuentan como opciones disponibles.
+            $contAcc     = sumillas_contar_seleccionables($db, $_SESSION['inst_codi']);
+            $menu_accion = ($contAcc > 1) ? sumillas_dibujar_arbol($db, $_SESSION['inst_codi']) : "";
             
      }
     }?>
@@ -1022,8 +1014,8 @@ elseif ($codTx!=9){
         <td width='80%' align='right' valign='middle'>
         <table border="0" align="center" width="100%">
         <tr>
-            <td WIDTH=5%>Operaciones:</td>
-            <td WIDTH=15%> <b></b><?php echo $menu_accion;?></td>
+            <td WIDTH=5% valign='top' class='titulos2'>Sumilla:</td>
+            <td WIDTH=28% valign='top'><?php echo $menu_accion;?></td>
             <td width='10%' align='right' valign='middle'>
                 <br/>
                     <b>Comentario: &nbsp;</b>

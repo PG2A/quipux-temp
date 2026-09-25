@@ -82,7 +82,8 @@ while (!$rs_paginador->EOF) {
     $tabla .= "<td><font size='1'>".$rs_paginador->fields['ÁREA']."</font></td>";
     $tabla .= "<td><font size='1'>".$puesto."</font></td>";
     $tabla .= "<td><font size='1'>".$puesto_cabecera."</font></td>";
-    $tabla .= "<td><font size='1'>".$rs_paginador->fields['ESTADO']."</font></td>";
+    // En el listado el estado va como etiqueta de color (SCR_Estado); aquí, texto plano.
+    $tabla .= "<td><font size='1'>".strip_tags($rs_paginador->fields['SCR_ESTADO'] ?? $rs_paginador->fields['ESTADO'] ?? '')."</font></td>";
     
    
    $tabla .= "</tr>";

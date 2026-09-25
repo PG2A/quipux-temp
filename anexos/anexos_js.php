@@ -48,6 +48,10 @@ $chk_asociar_imagen = $chk_asociar_imagen ?? "";
     var flag_anexos_estado_carga_archivos = false;
     var parametros_post = '<?=$parametros_post?>';
 
+    // Extensiones que el navegador puede mostrar en la vista previa antes de subir el archivo
+    var extenciones_vista_previa = ['pdf','jpg','jpeg','png','gif','bmp','webp'];
+    var url_vista_previa_local = '';
+
     // Validamos que no se esten subiendo archivos y el usuario intente salir de la página
     window.onbeforeunload = function () {
         if (flag_anexos_estado_carga_archivos) {
@@ -82,6 +86,7 @@ $chk_asociar_imagen = $chk_asociar_imagen ?? "";
                 document.getElementById('fil_archivo_nuevo_'+id_archivo).style.display = 'none';
                 document.getElementById('img_archivo_nuevo_borrar_'+id_archivo).style.display = '';
                 document.getElementById('lbl_archivo_nuevo_'+id_archivo).innerHTML = document.getElementById('fil_archivo_nuevo_'+id_archivo).value;
+                fjs_anexos_mostrar_icono_vista_previa(id_archivo, extension);
                 return true;
             }
         }
@@ -95,6 +100,81 @@ $chk_asociar_imagen = $chk_asociar_imagen ?? "";
         document.getElementById('fil_archivo_nuevo_'+id_archivo).value = '';
         document.getElementById('fil_archivo_nuevo_'+id_archivo).style.display = ''
         document.getElementById('img_archivo_nuevo_borrar_'+id_archivo).style.display = 'none';
+        fjs_anexos_ocultar_icono_vista_previa(id_archivo);
+        return;
+    }
+
+    // Muestra el icono de vista previa sólo si el navegador puede representar el archivo seleccionado
+    function fjs_anexos_mostrar_icono_vista_previa(id_archivo, extension) {
+        var img_vista_previa = document.getElementById('lnk_archivo_nuevo_previsualizar_'+id_archivo);
+        if (!img_vista_previa) return;
+
+        var campo_archivo = document.getElementById('fil_archivo_nuevo_'+id_archivo);
+        var nombre_original = campo_archivo.value.toLowerCase();
+        var flag_previsualizable = false;
+
+        // Los archivos firmados (.p7m) están cifrados, sólo se pueden ver una vez procesados en el servidor
+        if (nombre_original.indexOf('.p7m') == -1 && fjs_anexos_obtener_archivo_seleccionado(id_archivo) != null) {
+            for (var j = 0; j < extenciones_vista_previa.length; j++) {
+                if (extenciones_vista_previa[j] == extension) {
+                    flag_previsualizable = true;
+                    break;
+                }
+            }
+        }
+
+        img_vista_previa.style.display = flag_previsualizable ? '' : 'none';
+        return;
+    }
+
+    function fjs_anexos_ocultar_icono_vista_previa(id_archivo) {
+        var img_vista_previa = document.getElementById('lnk_archivo_nuevo_previsualizar_'+id_archivo);
+        if (img_vista_previa) img_vista_previa.style.display = 'none';
+        return;
+    }
+
+    // Obtiene el archivo seleccionado en el campo. Retorna null si el navegador no soporta el API de archivos
+    function fjs_anexos_obtener_archivo_seleccionado(id_archivo) {
+        var campo_archivo = document.getElementById('fil_archivo_nuevo_'+id_archivo);
+        if (!campo_archivo || !campo_archivo.files || campo_archivo.files.length == 0) return null;
+        if (typeof window.URL == 'undefined' || typeof window.URL.createObjectURL != 'function') return null;
+        return campo_archivo.files[0];
+    }
+
+    // Vista previa del archivo ANTES de enviarlo: se lee desde el equipo del usuario, no se sube al servidor
+    function fjs_anexos_previsualizar_archivo_nuevo(id_archivo) {
+        var archivo = fjs_anexos_obtener_archivo_seleccionado(id_archivo);
+        if (archivo == null) {
+            alert('Su navegador no permite mostrar la vista previa del archivo antes de subirlo.');
+            return;
+        }
+
+        fjs_anexos_liberar_vista_previa();
+        url_vista_previa_local = window.URL.createObjectURL(archivo);
+
+        var nombre_archivo = archivo.name.toLowerCase();
+        var contenido = '';
+        if (nombre_archivo.lastIndexOf('.pdf') == (nombre_archivo.length-4)) {
+            contenido = '<iframe id="ifr_anexos_vista_previa_local" src="' + url_vista_previa_local + '" ' +
+                        'style="width:100%; height:100%; display:block; border:0; overflow:auto;">' +
+                        'Su navegador no soporta iframes, por favor actualicelo.</iframe>';
+        } else {
+            contenido = '<img id="img_anexos_vista_previa_local" src="' + url_vista_previa_local + '" alt="Vista previa" ' +
+                        'style="width:100%; height:100%; display:block; object-fit:contain; object-position:center;">';
+        }
+
+        // El contenido va como hijo directo del área de trabajo del popup: un contenedor de alto automático
+        // (p.ej. <center>) impide que height:100% se resuelva y la vista previa queda diminuta.
+        fjs_popup_activar('Vista Previa: ' + archivo.name, '', '');
+        document.getElementById('div_popup_pantalla_tabajo').innerHTML = contenido;
+        return;
+    }
+
+    function fjs_anexos_liberar_vista_previa() {
+        if (url_vista_previa_local != '') {
+            try { window.URL.revokeObjectURL(url_vista_previa_local); } catch (e) {}
+            url_vista_previa_local = '';
+        }
         return;
     }
 
@@ -134,6 +214,7 @@ $chk_asociar_imagen = $chk_asociar_imagen ?? "";
 
     function anexos_cargar_archivo_nuevo_finalizar() {
         flag_anexos_estado_carga_archivos = false;
+        fjs_anexos_liberar_vista_previa();
         document.getElementById('lbl_nombre_archivo_nuevo').innerHTML ='';
         document.getElementById('div_anexos_cargar_nuevo_archivo').style.display = '';
         document.getElementById('div_anexos_cargar_nuevo_archivo_estado').style.display = 'none';
@@ -149,13 +230,24 @@ $chk_asociar_imagen = $chk_asociar_imagen ?? "";
             path_descarga += '&tipo_descarga=embeded';
             if (fjs_verificar_plugin_navegador ('acrobat')) path_descarga += '_ar';
             fjs_popup_activar ('Vista Previa', '', '');
-            document.getElementById('div_popup_pantalla_tabajo').innerHTML = '<center><iframe name="ifr_anexos_mostrar_archivo" id="ifr_anexos_mostrar_archivo" ' +
-                'style="width:99%; height:99%; overflow: auto; border: 1;" src="' + path_descarga + '">' +
-                'Su navegador no soporta iframes, por favor actualicelo.</iframe></center>';
+            document.getElementById('div_popup_pantalla_tabajo').innerHTML = '<iframe name="ifr_anexos_mostrar_archivo" id="ifr_anexos_mostrar_archivo" ' +
+                'style="width:100%; height:100%; display:block; border:0; overflow:auto;" src="' + path_descarga + '">' +
+                'Su navegador no soporta iframes, por favor actualicelo.</iframe>';
         } else {
             path_descarga += '&tipo_descarga=download';
             document.getElementById('ifr_descargar_archivo').src=path_descarga;
         }
+        return;
+    }
+
+    // Descarga todos los anexos del documento comprimidos en un ZIP
+    function anexos_descargar_zip(radicado) {
+        var ifr_descarga = document.getElementById('ifr_descargar_archivo');
+        if (!ifr_descarga) {
+            alert('No se pudo iniciar la descarga en esta pantalla.');
+            return;
+        }
+        ifr_descarga.src = ruta_raiz+'/anexos/anexos_descargar_zip.php?radi_nume='+radicado;
         return;
     }
 
@@ -239,6 +331,15 @@ $chk_asociar_imagen = $chk_asociar_imagen ?? "";
             document.getElementById('img_anexos_mostrar_detalle_'+anex_codigo).style.display='';
         }
         return;
+    }
+
+    // Al cerrar el popup se libera la vista previa local para no dejar el archivo en memoria
+    if (typeof(fjs_popup_cerrar) == 'function' && typeof(fjs_popup_cerrar_original_anexos) == 'undefined') {
+        var fjs_popup_cerrar_original_anexos = fjs_popup_cerrar;
+        fjs_popup_cerrar = function () {
+            fjs_anexos_liberar_vista_previa();
+            return fjs_popup_cerrar_original_anexos();
+        };
     }
 
     if(typeof(fjs_radicado_descargar_archivo) != 'function')  {

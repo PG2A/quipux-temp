@@ -66,7 +66,62 @@ class Historico
                . htmlspecialchars($this->db->querySql ?? 'unknown sql')
                . "</pre>";
         }
+
+        if ($ok) $this->registrarSumillas($radicado, $usua_ori);
+
+        $this->auditarSubrogacion($radicado, $tipoTx);
+
         return ($radicado);
+    }
+
+    /**
+     * Deja registradas, ligadas a este evento, las sumillas que el usuario eligió
+     * en el árbol de la pantalla de reasignación.
+     *
+     * Se engancha aquí porque insertarHistorico() es el punto por el que pasan
+     * todas las transacciones, y porque es el único momento en que se conoce el
+     * hist_codi contra el que hay que colgarlas para que salgan en la hoja de ruta.
+     *
+     * Sólo se registran en el evento del usuario que las eligió: una reasignación
+     * desde bandeja compartida inserta antes el traspaso jefe -> asistente, y la
+     * sumilla no pertenece a ese salto.
+     */
+    function registrarSumillas($radicado, $usua_ori)
+    {
+        include_once(dirname(__DIR__).'/sumillas/Sumillas.php');
+        if (count(sumillas_seleccion()) == 0) return;
+        if ((int)$usua_ori !== (int)($_SESSION["usua_codi"] ?? 0)) return;
+
+        $hist_codi = sumillas_ultimo_hist_codi($this->db, $radicado, $usua_ori);
+
+        sumillas_registrar($this->db, $radicado, $hist_codi, $usua_ori);
+    }
+
+    /**
+     * Deja constancia de la persona real cuando la acción se ejecuta bajo un
+     * cargo subrogado.
+     *
+     * hist_eventos registra la autoría del CARGO (que es lo correcto de cara al
+     * documento), de modo que sin este registro complementario se perdería quién
+     * actuó realmente. Se engancha aquí porque insertarHistorico() es el punto
+     * por el que pasan todas las transacciones del sistema.
+     */
+    function auditarSubrogacion($radicado, $tipoTx)
+    {
+        if (empty($_SESSION['subrogacion_codi'])) return;
+
+        $real     = (int)($_SESSION['usua_codi_real'] ?? 0);
+        $actuando = (int)($_SESSION['usua_codi'] ?? 0);
+        if ($real <= 0 || $real === $actuando) return;
+
+        include_once(dirname(__DIR__) . '/subrogacion/Subrogacion.php');
+        $subrogacion = new Subrogacion($this->db);
+        $subrogacion->auditar(
+            (int)$_SESSION['subrogacion_codi'],
+            $real,
+            $actuando,
+            'TX_' . $tipoTx,
+            $radicado);
     }
 
 

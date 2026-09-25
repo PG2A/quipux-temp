@@ -43,8 +43,14 @@ $datosrad = ObtenerDatosRadicado($verrad,$db);
 $usua_rem  = ObtenerListaUsuariosDocumento($db, $verrad, "R");
 $usua_dest = ObtenerListaUsuariosDocumento($db, $verrad, "D");
 
+// Sumillas registradas en cada evento; la hoja de ruta impresa debe mostrarlas
+// igual que la pantalla. El fragmento devuelve null donde la tabla aún no existe.
+include_once(dirname(__DIR__).'/include/sumillas/Sumillas.php');
+$col_sumillas = sumillas_columna_historico($db, "h");
+
 $sql = "select -- Ver Historico
             substr(h.hist_fech::text,1,19) as hist_fech1
+            , $col_sumillas
             , ver_usuarios(usua_codi_ori::text,',') as usua_ori
             , (select depe_nomb from usuario where usua_codi=usua_codi_ori) as depe_nomb
             , ver_usuarios(usua_codi_dest::text,',') as usua_dest
@@ -112,12 +118,13 @@ $html = "<!DOCTYPE html>
         </table>
     </td></tr></table>
     <table width='100%' align='center' cellspacing='2' cellpadding='2' border='1'>
-        <tr><td colspan='".(($imprimir_observacion) ? "7" : "6")."' align='left'><font size=2><b>Ruta del documento</b></font></td>
+        <tr><td colspan='".(($imprimir_observacion) ? "8" : "7")."' align='left'><font size=2><b>Ruta del documento</b></font></td>
         <tr>
             <td align='center'><font size=2><b>&Aacute;rea</b></font></td>
             <td align='center'><font size=2><b>De</b></font></td>
             <td align='center'><font size=2><b>Fecha/Hora</b></font></td>
             <td align='center'><font size=2><b>Acci&oacute;n</b></font></td>
+            <td align='center'><font size=2><b>Sumilla</b></font></td>
             <td align='center'><font size=2><b>Para</b></font></td>
             <td align='center'><font size=2><b>No. D&iacute;as</b></font></td>".
             (($imprimir_observacion) ? "<td align='center'><font size=2><b>Comentario</b></font></td>" : "").
@@ -134,6 +141,10 @@ while($rs && !$rs->EOF) {
                     <td><font size=1>".$rs->fields["USUA_ORI"]."</font></td>
                     <td><font size=1>".$rs->fields["HIST_FECH1"]."$descZonaHoraria</font></td>
                     <td><font size=1>".$rs->fields["SGD_TTR_DESCRIP"]."</font></td>";
+        // Texto tal como estaba al aplicarse: si la sumilla se renombró o se
+        // retiró del catálogo, la hoja de ruta impresa no cambia.
+        $sumillas = trim($rs->fields["SUMILLAS"] ?? '');
+        $html .= "<td><font size=1>".(($sumillas != '') ? htmlspecialchars($sumillas) : '&nbsp;')."</font></td>";
         $html .= (($rs->fields["USUA_ORI"] == $rs->fields["USUA_DEST"])) ? "<td>&nbsp;</td>" : "<td><font size=1>".$rs->fields["USUA_DEST"]."</font></td>";
         $html .= "<td><font size=1>".$rs->fields["TOT_DIAS"]."</font></td>";
         $html .= ($imprimir_observacion) ? "<td><font size=1>".$rs->fields["HIST_OBSE"]."</font></td>" : "";
