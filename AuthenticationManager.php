@@ -94,8 +94,9 @@ class AuthenticationManager {
             FROM usuario u
             WHERE UPPER(u.usua_login) = ?
               AND u.usua_esta = 1
+              AND u.tipo_usuario = 1   -- solo funcionarios; los ciudadanos entran por login.php?tipo=externo
               AND usuario_vigente(u.usua_codi)   -- fuera de su fecha inicio/fin no entra
-            ORDER BY u.tipo_usuario ASC, u.usua_codi ASC
+            ORDER BY u.usua_codi ASC
             LIMIT 1
         ";
         
@@ -233,7 +234,7 @@ class AuthenticationManager {
         }
         
         // Buscar usuario en BD
-        $sql = "SELECT * FROM usuario WHERE UPPER(usua_login) = ? AND usua_esta = 1 ORDER BY tipo_usuario ASC LIMIT 1";
+        $sql = "SELECT * FROM usuario WHERE UPPER(usua_login) = ? AND usua_esta = 1 AND tipo_usuario = 1 LIMIT 1";
         $rs = $this->db->conn->Execute($sql, array($login));
         
         if (!$rs->EOF) {

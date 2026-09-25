@@ -18,6 +18,12 @@ if (empty($_SESSION['acceso_externo']) || empty($_SESSION['ciu_codigo'])) {
     exit;
 }
 
+// Sigue con la clave inicial (cédula/documento): primero debe cambiarla.
+if (!empty($_SESSION['ext_forzar_cambio'])) {
+    header('Location: cambiar_clave_externo.php');
+    exit;
+}
+
 require_once __DIR__ . '/config/autoload.php';
 include_once __DIR__ . '/config.php';
 require_once __DIR__ . '/include/db/ConnectionHandler.php';

@@ -55,7 +55,12 @@ if ($tipo_acceso === 'externo' && !empty($krd) && !empty($drd)) {
         $_SESSION['ciu_nombre']     = trim($externo['ciu_nombre'] . ' ' . $externo['ciu_apellido']);
         $_SESSION['ciu_email']      = $externo['ciu_email'];
         $_SESSION['tipo_usuario']   = 'c';
-        header('Location: portal_externo.php');
+        // Clave inicial = cédula/documento (se le asigna al crearlo o al aprobar su
+        // solicitud): mientras la siga usando solo puede ir a cambiarla.
+        $documento = (string)$db_ext->conn->GetOne("select coalesce(ciu_documento,'') from ciudadano where ciu_codigo=" . (int)$externo['ciu_codigo']);
+        $claves_iniciales = array_filter(array($externo['ciu_cedula'], trim($documento)));
+        $_SESSION['ext_forzar_cambio'] = in_array(trim($drd), $claves_iniciales, true) ? 1 : 0;
+        header('Location: ' . ($_SESSION['ext_forzar_cambio'] ? 'cambiar_clave_externo.php' : 'portal_externo.php'));
         exit;
     }
 
@@ -75,16 +80,15 @@ if ($tipo_acceso === 'externo' && !empty($krd) && !empty($drd)) {
             $db->conn->SetFetchMode(ADODB_FETCH_ASSOC);
 
             $krd_upper = strtoupper("U" . $krd);
-            // Se lee de la tabla unificada 'usuario' (funcionarios + ciudadanos), que
-            // ya trae depe_nomb, inst_nombre y tipo_usuario (1 funcionario / 2
-            // ciudadano). Se toma la cuenta concreta que autenticar() validó, por si
-            // la misma cédula tiene cuenta de funcionario y de ciudadano.
+            // Login interno: solo funcionarios (tipo_usuario = 1). Los ciudadanos
+            // entran por login.php?tipo=externo al portal externo.
+            // Se toma la cuenta concreta que autenticar() validó.
             $usua_codi_aut = $_SESSION['usua_codi_autenticado'] ?? null;
             unset($_SESSION['usua_codi_autenticado']);
             $where_cuenta = ($usua_codi_aut !== null) ? " AND u.usua_codi = " . (int)$usua_codi_aut : "";
             $query = "SELECT u.* FROM usuario u
-                      WHERE UPPER(u.usua_login) = UPPER('$krd_upper') AND u.usua_esta = 1 AND usuario_vigente(u.usua_codi) $where_cuenta
-                      ORDER BY u.tipo_usuario ASC, u.usua_codi ASC LIMIT 1";
+                      WHERE UPPER(u.usua_login) = UPPER('$krd_upper') AND u.usua_esta = 1 AND u.tipo_usuario = 1 AND usuario_vigente(u.usua_codi) $where_cuenta
+                      ORDER BY u.usua_codi ASC LIMIT 1";
             $rs = $db->conn->Execute($query);
 
             if ($rs && !$rs->EOF) {
@@ -170,18 +174,10 @@ if ($tipo_acceso === 'externo' && !empty($krd) && !empty($drd)) {
                         die();
                     }
 
-                    // Ciudadanos: la clave inicial es su cédula/documento (ver
-                    // Administracion/ciudadanos/grabar_usuario_ext.php). Mientras siga
-                    // usándola, rec_session.php solo le permite la pantalla de cambio
-                    // de contraseña.
+                    // El cambio obligatorio de la clave inicial de ciudadanos se hace
+                    // ahora en el acceso externo (cambiar_clave_externo.php).
                     $_SESSION["forzar_cambio_clave"] = 0;
-                    if ($tipo_usuario == 2) {
-                        $claves_iniciales = array(trim((string)($rs->fields['USUA_CEDULA'] ?? '')), substr($krd_upper, 1));
-                        $documento = $db->conn->GetOne("select ciu_documento from ciudadano where ciu_codigo=$usua_codi");
-                        if (trim((string)$documento) != '') $claves_iniciales[] = trim($documento);
-                        if (in_array(trim($drd), $claves_iniciales, true)) $_SESSION["forzar_cambio_clave"] = 1;
-                    }
-                    $destino = $_SESSION["forzar_cambio_clave"] ? 'Administracion/usuarios/cambiar_password.php?forzar=1' : 'index_frames.php';
+                    $destino = 'index_frames.php';
 
                     // header('Location: index_frames.php');
                     // exit;

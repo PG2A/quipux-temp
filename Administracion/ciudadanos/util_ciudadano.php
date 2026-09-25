@@ -397,6 +397,11 @@ class Ciudadano {
            $ruta_raiz = $this->ruta_raiz;
            include(__DIR__.'/config.php');
            include_once(__DIR__.'/funciones.php');
+           // Aquí no hay config.php junto a este archivo: se toma el servidor de la configuración global.
+           if (empty($nombre_servidor)) $nombre_servidor = $GLOBALS['nombre_servidor'] ?? ($GLOBALS['CFG']->nombre_servidor ?? '');
+           if (empty($cuenta_mail_soporte)) $cuenta_mail_soporte = $GLOBALS['cuenta_mail_soporte'] ?? ($GLOBALS['CFG']->cuenta_mail_soporte ?? '');
+           // Los ciudadanos inician sesión por el acceso externo, no por el login de funcionarios.
+           $url_login_ciudadano = rtrim((string)$nombre_servidor, "/") . "/login.php?tipo=externo";
            if($emailDestino!="" and strpos($emailDestino,"@") and strpos($emailDestino,".",strpos($emailDestino,"@")))
             {
               switch ($accion)
@@ -409,7 +414,7 @@ class Ciudadano {
                             .$institucion.", ha sido <b>Rechazada</b>.";
                     $mail .= "<br /><br />Por favor verifique las observaciones de la solicitud y envie nuevamente al cumplir con lo solicitado.";
                     $mail .= "<br /><br />Le recordamos que para acceder al sistema deber&aacute; hacerlo con el usuario &quot;$ciu_cedula&quot;
-                              ingresando a <a href='$nombre_servidor' target='_blank'>$nombre_servidor</a>";
+                              ingresando a <a href='$url_login_ciudadano' target='_blank'>$url_login_ciudadano</a>";
                     $mail .= "<br /><br />Saludos cordiales,<br /><br />Soporte Quipux.";
                     $mail .= "<br /><br /><b>Nota: </b>Este mensaje fue enviado autom&aacute;ticamente por el sistema, por favor no lo responda.";
                     $mail .= "<br />Si tiene alguna inquietud respecto a este mensaje, comun&iacute;quese con <a href='mailto:$cuenta_mail_soporte'>$cuenta_mail_soporte</a>";
@@ -423,7 +428,7 @@ class Ciudadano {
                     $mail .= "Estimado(a) Ciudadano(a): <br><br/><br/>";
                     $mail .= "La solicitud del ciudadano(a) ".$ciu_nombre." enviada a la instituci&oacute;n "
                             .$institucion.", ha sido <b>Aceptada</b>.";    
-                    $mail .= "<br /><br />Por favor, para revisar la informaci&oacute;n. ingrese a <a href='$nombre_servidor' target='_blank'>$nombre_servidor</a>";
+                    $mail .= "<br /><br />Por favor, para revisar la informaci&oacute;n. ingrese a <a href='$url_login_ciudadano' target='_blank'>$url_login_ciudadano</a>";
                     $mail .= "<br /><br />Saludos cordiales,<br /><br />Soporte Quipux.";
                     $mail .= "<br /><br /><b>Nota: </b>Este mensaje fue enviado autom&aacute;ticamente por el sistema, por favor no lo responda.";
                     $mail .= "<br />Si tiene alguna inquietud respecto a este mensaje, comun&iacute;quese con <a href='mailto:$cuenta_mail_soporte'>$cuenta_mail_soporte</a>";

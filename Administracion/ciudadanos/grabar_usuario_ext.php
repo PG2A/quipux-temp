@@ -63,6 +63,8 @@ $ciu_sincedula = $ciu_sincedula ?? ($_POST['ciu_sincedula'] ?? 0);
 // config.php ya fue cargado dentro de ConnectionHandler, así que sus variables
 // sueltas no existen aquí; se toman de $CFG para que los correos lleven enlace.
 $nombre_servidor = !empty($nombre_servidor) ? $nombre_servidor : ($CFG->nombre_servidor ?? "");
+// Los ciudadanos inician sesión por el acceso externo, no por el login de funcionarios.
+$url_login_ciudadano = rtrim($nombre_servidor, "/") . "/login.php?tipo=externo";
 $cuenta_mail_soporte = !empty($cuenta_mail_soporte) ? $cuenta_mail_soporte : ($CFG->cuenta_mail_soporte ?? "");
 
 //variable validar en servidor el grabar
@@ -287,10 +289,10 @@ else
                       <tr><td><b>Contrase&ntilde;a:</b></td><td>$clave_inicial</td></tr>
                       </table><br />
                       Al ingresar por primera vez el sistema le solicitar&aacute; cambiar esta contrase&ntilde;a.";
-            $mail .= "<br /><br />Puede acceder ingresando a <a href='$nombre_servidor' target='_blank'>$nombre_servidor</a>";
+            $mail .= "<br /><br />Puede acceder ingresando a <a href='$url_login_ciudadano' target='_blank'>$url_login_ciudadano</a>";
         } else {
             $mail .= "<br /><br />Le recordamos que para acceder al sistema deber&aacute; hacerlo con el usuario &quot;$tmp_cedula&quot;
-                      ingresando a <a href='$nombre_servidor' target='_blank'>$nombre_servidor</a>";
+                      ingresando a <a href='$url_login_ciudadano' target='_blank'>$url_login_ciudadano</a>";
         }
         $mail .= "<br /><br />Saludos cordiales,<br /><br />Soporte Quipux.";
         $mail .= "<br /><br /><b>Nota: </b>Este mensaje fue enviado autom&aacute;ticamente por el sistema, por favor no lo responda.";
@@ -381,7 +383,7 @@ else
         $mail .= "Se ha unificado la información de los usuarios &quot;$old_cedula&quot; y &quot;$tmp_cedula&quot; en uno solo.<br /><br />";
         $mail .= "Todos los documentos pertenecientes al usuario &quot;$old_cedula&quot; fueron movidos a las bandejas del usuario &quot;$tmp_cedula&quot; y el usuario &quot;$old_cedula&quot; ha sido desactivado.<br /><br />";
         $mail .= "Le recordamos que para acceder al sistema deber&aacute; hacerlo con el usuario &quot;$tmp_cedula&quot;
-                  ingresando a <a href='$nombre_servidor' target='_blank'>$nombre_servidor</a>";
+                  ingresando a <a href='$url_login_ciudadano' target='_blank'>$url_login_ciudadano</a>";
         $mail .= "<br /><br />Saludos cordiales,<br /><br />Soporte Quipux.";
         $mail .= "<br /><br /><b>Nota: </b>Este mensaje fue enviado autom&aacute;ticamente por el sistema, por favor no lo responda.";
         $mail .= "<br />Si tiene alguna inquietud respecto a este mensaje, comun&iacute;quese con <a href='mailto:$cuenta_mail_soporte'>$cuenta_mail_soporte</a>";

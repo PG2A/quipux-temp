@@ -35,6 +35,9 @@ include_once(dirname(__DIR__, 2).'/rec_session.php');
 require_once(dirname(__DIR__, 2)."/funciones.php"); //para traer funciones p_get y p_post
 require_once(dirname(__DIR__, 2).'/obtenerdatos.php'); //formar la observacion de edicion
 include_once(dirname(__DIR__, 2).'/funciones_interfaz.php');
+// Los ciudadanos inician sesión por el acceso externo, no por el login de funcionarios.
+$nombre_servidor = !empty($nombre_servidor) ? $nombre_servidor : ($CFG->nombre_servidor ?? "");
+$url_login_ciudadano = rtrim($nombre_servidor, "/") . "/login.php?tipo=externo";
 
 p_register_globals(array());
 
@@ -183,7 +186,7 @@ if (isset($pagina_anterior) and trim($ciu_email)!="") {
               <tr><td><b>E-mail:</b></td><td>$ciu_email</td></tr>
               </table>";
     $mail .= "<br /><br />Le recordamos que para acceder al sistema deber&aacute; hacerlo con el usuario &quot;$tmp_cedula&quot;
-              ingresando a <a href='$nombre_servidor' target='_blank'>$nombre_servidor</a>";
+              ingresando a <a href='$url_login_ciudadano' target='_blank'>$url_login_ciudadano</a>";
     $mail .= "<br /><br />Saludos cordiales,<br /><br />Soporte Quipux.";
     $mail .= "<br /><br /><b>Nota: </b>Este mensaje fue enviado autom&aacute;ticamente por el sistema, por favor no lo responda.";
     $mail .= "<br />Si tiene alguna inquietud respecto a este mensaje, comun&iacute;quese con <a href='mailto:$cuenta_mail_soporte'>$cuenta_mail_soporte</a>";
@@ -249,7 +252,7 @@ if (isset($_POST["ciu_codigo_eliminar"])) {
         $mail .= "Se ha unificado la información de los usuarios &quot;$old_cedula&quot; y &quot;$tmp_cedula&quot; en uno solo.<br /><br />";
         $mail .= "Todos los documentos pertenecientes al usuario &quot;$old_cedula&quot; fueron movidos a las bandejas del usuario &quot;$tmp_cedula&quot; y el usuario &quot;$old_cedula&quot; ha sido desactivado.<br /><br />";
         $mail .= "Le recordamos que para acceder al sistema deber&aacute; hacerlo con el usuario &quot;$tmp_cedula&quot;
-                  ingresando a <a href='$nombre_servidor' target='_blank'>$nombre_servidor</a>";
+                  ingresando a <a href='$url_login_ciudadano' target='_blank'>$url_login_ciudadano</a>";
         $mail .= "<br /><br />Saludos cordiales,<br /><br />Soporte Quipux.";
         $mail .= "<br /><br /><b>Nota: </b>Este mensaje fue enviado autom&aacute;ticamente por el sistema, por favor no lo responda.";
         $mail .= "<br />Si tiene alguna inquietud respecto a este mensaje, comun&iacute;quese con <a href='mailto:$cuenta_mail_soporte'>$cuenta_mail_soporte</a>";

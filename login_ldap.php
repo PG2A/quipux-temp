@@ -88,7 +88,8 @@ function autenticar($user, $password) {
             FROM usuario u
             WHERE UPPER(u.usua_login) = ?
               AND u.usua_esta = 1
-            ORDER BY u.tipo_usuario ASC, u.usua_codi ASC
+              AND u.tipo_usuario = 1   -- solo funcionarios; los ciudadanos entran por login.php?tipo=externo
+            ORDER BY u.usua_codi ASC
         ";
 
         $rs = $db->conn->Execute($sql, array($login));

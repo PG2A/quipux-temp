@@ -428,6 +428,12 @@ class SolicitudCiudadano
         return $CFG->nombre_servidor ?? '';
     }
 
+    /** Los ciudadanos inician sesión por el acceso externo, no por el login de funcionarios. */
+    private function urlLoginCiudadano()
+    {
+        return rtrim($this->servidor(), '/') . '/login.php?tipo=externo';
+    }
+
     private function enviar($mensaje, $asunto, $destinatarios, $nombre = '')
     {
         include_once($this->ruta_raiz . '/funciones.php');
@@ -478,7 +484,7 @@ class SolicitudCiudadano
                  <tr><td><b>Contrase&ntilde;a:</b></td><td>$clave</td></tr>
                </table><br />
                Al ingresar por primera vez el sistema le solicitar&aacute; cambiar esta contrase&ntilde;a.";
-        $m .= "<br /><br />Puede acceder ingresando a <a href='" . $this->servidor() . "' target='_blank'>" . $this->servidor() . "</a>";
+        $m .= "<br /><br />Puede acceder ingresando a <a href='" . $this->urlLoginCiudadano() . "' target='_blank'>" . $this->urlLoginCiudadano() . "</a>";
         $m .= $this->pieCorreo();
         $this->enviar($m, "Quipux: Creación de Ciudadano.", $sol['ciu_email'], $sol['ciu_nombre_completo']);
     }
